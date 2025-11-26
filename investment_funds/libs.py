@@ -274,6 +274,25 @@ class Trader:
         """取得當前持倉"""
         return self.inventory.copy()
 
+    def get_annualized_return(self) -> float:
+        """計算年化報酬率"""
+        if not self.portfolio_history:
+            return 0.0
+        
+        start_value = self.initial_balance
+        end_value = self.portfolio_history[-1].total_value
+        
+        start_date = self.portfolio_history[0].timestamp
+        end_date = self.portfolio_history[-1].timestamp
+        
+        years = (end_date - start_date).days / 365.25
+        
+        if years <= 0:
+            return 0.0
+            
+        annualized_return = (end_value / start_value) ** (1 / years) - 1
+        return annualized_return
+
 
 # ============================================================================
 # 數據提供者
@@ -689,6 +708,81 @@ class SimulatedMarket:
             
             # 記錄每日狀態
             trader.update_daily_snapshot(market_data)
+    
+    def _calculate_average_drawdown(self, history: list, min_drawdown_threshold: float = 0.15):
+        """計算平均回撤"""
+        significant_drawdowns = []
+        peak = history[0]
+        
+        for value in history:
+            if value > peak:
+                peak = value
+            current_dd = (value - peak) / peak
+            dd_abs = abs(current_dd)
+            if dd_abs >= min_drawdown_threshold:
+                significant_drawdowns.append(dd_abs)
+        
+        if significant_drawdowns:
+            avg = sum(significant_drawdowns) / len(significant_drawdowns)
+            return avg, len(significant_drawdowns)
+        return 0, 0
+    
+    def _get_best_rebalance_frequency(self, strategy):
+        """計算最佳再平衡頻率"""
+        if not self._traders:
+            return None
+        
+        # 找出相同策略的所有 traders
+        strategy_name = strategy.__class__.__name__
+        matching_traders = {}
+        
+        for label, trader in self._traders.items():
+            if trader.strategy.__class__.__name__ == strategy_name:
+                # 計算績效指標
+                history = [snap.total_value for snap in trader.portfolio_history]
+                dates = [snap.timestamp for snap in trader.portfolio_history]
+                
+                if len(history) < 2:
+                    continue
+                
+                initial = trader.initial_balance
+                final = history[-1]
+                days = (dates[-1] - dates[0]).days
+                
+                # 年化報酬
+                annual_return = (final / initial) ** (365 / days) - 1 if days > 0 else 0
+                
+                # 平均回撤 (使用固定門檻 0.15)
+                avg_dd, dd_count = self._calculate_average_drawdown(history, min_drawdown_threshold=0.15)
+                
+                # 計算分數
+                score = annual_return - avg_dd
+                
+                matching_traders[trader.rebalance_frequency] = {
+                    'frequency': trader.rebalance_frequency,
+                    'annual_return': annual_return,
+                    'avg_drawdown': avg_dd,
+                    'drawdown_count': dd_count,
+                    'score': score
+                }
+        
+        if not matching_traders:
+            return None
+        
+        # 找出分數最高的
+        best = max(matching_traders.values(), key=lambda x: x['score'])
+        
+        # 中文化頻率
+        freq_map = {
+            'daily': '每日',
+            'weekly': '每週',
+            'monthly': '每月',
+            'quarterly': '每季',
+            'yearly': '每年'
+        }
+        best['frequency'] = freq_map.get(best['frequency'], best['frequency'])
+        
+        return best
         
     def get_trading_recommendation(self, strategy, date: pd.Timestamp = None) -> str:
         """生成每日交易建議"""
@@ -726,6 +820,14 @@ class SimulatedMarket:
         if hasattr(strategy, 'topk'):
             strategy_name += f" (topk={strategy.topk})"
         lines.append(f"策略：{strategy_name}")
+
+        # 計算最佳再平衡頻率
+        best_freq = self._get_best_rebalance_frequency(strategy)
+        
+        if best_freq:
+            lines.append(f"更新週期：{best_freq['frequency']}")
+            lines.append(f"年化收益：{best_freq['annual_return']:.2%}")
+            lines.append(f"平均回撤幅度：{best_freq['avg_drawdown']:.2%}")
         
         lines.append("\n💼 推薦持倉配置：")
         
@@ -735,7 +837,7 @@ class SimulatedMarket:
         
         for code, weight in sorted_weights:
             industry = code_to_industry.get(code, "Unknown")
-            lines.append(f"  {code:8s}  {weight*100:5.1f}%  ({industry})")
+            lines.append(f"  {code:8s}  ({industry})")
         
         if 'CASH' in weights:
             lines.append(f"  現金      {weights['CASH']*100:5.1f}%")
@@ -772,13 +874,8 @@ class SimulatedMarket:
                 bearish.append(industry)
         
         if bullish:
-            lines.append(f"  • 優先配置：{', '.join(bullish)} 產業")
+            lines.append(f" • 優先配置{', '.join(bullish)} 產業")
         if bearish:
-            lines.append(f"  • 減持調整：{', '.join(bearish)} 產業")
-        
-        cash_ratio = weights.get('CASH', 0)
-        lines.append(f"  • 現金比例：保留 {cash_ratio*100:.1f}% 應對波動")
-        
-        lines.append("━" * 43)
-        
+            lines.append(f" • 減持調整{', '.join(bearish)} 產業")
+
         return "\n".join(lines)
