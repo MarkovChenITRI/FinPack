@@ -1,0 +1,487 @@
+/* FinPack 全球市場看盤 - 樣式表 */
+
+:root {
+    --bg-primary: #0a0e14;
+    --bg-secondary: #12171f;
+    --bg-card: #1a1f2a;
+    --bg-hover: #242b38;
+    --text-primary: #e6edf3;
+    --text-secondary: #7d8590;
+    --text-muted: #545d68;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-blue: #58a6ff;
+    --accent-purple: #a855f7;
+    --accent-gold: #f59e0b;
+    --border-color: #2d333b;
+    --border-subtle: #21262d;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', sans-serif;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, #0d1218 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+}
+
+/* ===== 標題區 ===== */
+.header {
+    text-align: center;
+    margin-bottom: 28px;
+    padding: 20px 0;
+}
+
+.header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #fff 0%, #a8c7fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 2px;
+}
+
+/* ===== 資訊面板 ===== */
+.info-panel {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.info-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 24px;
+    min-width: 110px;
+    text-align: center;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-color);
+}
+
+.info-card .label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-card .value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+#selected-date-card {
+    background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+#selected-date-card .label {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#selected-date-card .value {
+    color: white;
+}
+
+/* ===== 分類標籤 (價值投資/資本輪動) ===== */
+.category-tabs {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.category-btn {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 14px 40px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.category-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.category-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.category-btn:hover::before {
+    opacity: 1;
+}
+
+.category-btn.active {
+    background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+    border-color: #22c55e;
+    color: white;
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.35);
+    transform: translateY(-1px);
+}
+
+.category-btn[data-category="rotation"].active {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    border-color: #a855f7;
+    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.35);
+}
+
+/* ===== 圖表切換標籤 ===== */
+.chart-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.chart-tabs.hidden {
+    display: none;
+}
+
+.tab-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 22px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.tab-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+    border-color: #3b82f6;
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* ===== 圖表容器 ===== */
+.chart-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 20px;
+    position: relative;
+    min-height: 520px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.chart {
+    width: 100%;
+    height: 480px;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.chart.active {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    position: relative;
+    top: 0;
+    left: 0;
+}
+
+/* ===== 時間範圍選擇器 ===== */
+.period-selector {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.period-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 18px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.period-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.period-btn.active {
+    background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+    border-color: #22c55e;
+    color: white;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+/* ===== 載入動畫 ===== */
+.loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 14, 20, 0.95);
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+}
+
+.loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.spinner {
+    width: 52px;
+    height: 52px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading p {
+    margin-top: 20px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+}
+
+/* ===== 頁尾資訊 ===== */
+.footer-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--text-muted);
+    box-shadow: var(--shadow-sm);
+}
+
+.footer-info span {
+    font-weight: 500;
+}
+
+/* ===== 響應式設計 ===== */
+@media (max-width: 768px) {
+    .container {
+        padding: 16px;
+    }
+    
+    .header {
+        margin-bottom: 20px;
+        padding: 12px 0;
+    }
+    
+    .header h1 {
+        font-size: 24px;
+    }
+    
+    .subtitle {
+        font-size: 13px;
+        letter-spacing: 1px;
+    }
+    
+    .info-panel {
+        gap: 6px;
+    }
+    
+    .info-card {
+        min-width: 90px;
+        padding: 10px 14px;
+    }
+    
+    .info-card .label {
+        font-size: 10px;
+    }
+    
+    .info-card .value {
+        font-size: 15px;
+    }
+    
+    .category-tabs {
+        gap: 10px;
+    }
+    
+    .category-btn {
+        padding: 12px 24px;
+        font-size: 14px;
+    }
+    
+    .chart-tabs {
+        gap: 6px;
+    }
+    
+    .tab-btn {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+    
+    .chart-container {
+        min-height: 420px;
+        padding: 14px;
+        border-radius: var(--radius-md);
+    }
+    
+    .chart {
+        height: 390px;
+    }
+    
+    .period-selector {
+        gap: 6px;
+    }
+    
+    .period-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .footer-info {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+        padding: 12px 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .category-btn {
+        padding: 10px 18px;
+        font-size: 13px;
+    }
+    
+    .info-card {
+        min-width: 80px;
+        padding: 8px 10px;
+    }
+}
+
+/* ===== K線提示框 ===== */
+.tooltip {
+    position: absolute;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    font-size: 13px;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* ===== 滾動條樣式 ===== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* ===== 選取樣式 ===== */
+::selection {
+    background: rgba(88, 166, 255, 0.3);
+    color: var(--text-primary);
+}

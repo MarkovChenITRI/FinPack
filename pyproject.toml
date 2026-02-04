@@ -1,17 +1,15 @@
 [project]
-name = "finbuddy"
+name = "finpack"
 version = "0.1.0"
-description = "股市投資組合最佳化與回測系統"
+description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "mplfinance>=0.12.10b0",
-    "numpy>=2.3.1",
-    "pandas>=2.3.1",
-    "yfinance>=0.2.65",
-    "requests>=2.32.0",
-    "scipy>=1.14.0",
-    "scikit-learn>=1.5.0",
-    "matplotlib>=3.9.0",
-    "tqdm>=4.67.0",
+    "flask>=3.1.2",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "requests>=2.32.5",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.0",
+    "yfinance>=1.1.0",
 ]

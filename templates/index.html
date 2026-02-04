@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinPack - 全球市場看盤</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Lightweight Charts by TradingView -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 標題區 -->
+        <header class="header">
+            <h1>📈 FinPack 全球市場看盤</h1>
+            <p class="subtitle">價值投資 | 資本輪動</p>
+        </header>
+
+        <!-- 資訊面板 -->
+        <div class="info-panel">
+            <div class="info-card" id="selected-date-card">
+                <span class="label">選擇日期</span>
+                <span class="value" id="selected-date">點擊K線查看</span>
+            </div>
+            <div class="info-card">
+                <span class="label">開盤</span>
+                <span class="value" id="price-open">-</span>
+            </div>
+            <div class="info-card">
+                <span class="label">最高</span>
+                <span class="value" id="price-high">-</span>
+            </div>
+            <div class="info-card">
+                <span class="label">最低</span>
+                <span class="value" id="price-low">-</span>
+            </div>
+            <div class="info-card">
+                <span class="label">收盤</span>
+                <span class="value" id="price-close">-</span>
+            </div>
+        </div>
+
+        <!-- 分類標籤 -->
+        <div class="category-tabs">
+            <button class="category-btn active" data-category="value">💼 價值投資</button>
+            <button class="category-btn" data-category="rotation">🔄 資本輪動</button>
+        </div>
+
+        <!-- 圖表切換 - 價值投資 -->
+        <div class="chart-tabs" id="tabs-value">
+            <button class="tab-btn active" data-market="global">🌍 國際加權</button>
+            <button class="tab-btn" data-market="nasdaq">🇺🇸 NASDAQ</button>
+            <button class="tab-btn" data-market="twii">🇹🇼 台股</button>
+        </div>
+
+        <!-- 圖表切換 - 資本輪動 -->
+        <div class="chart-tabs hidden" id="tabs-rotation">
+            <button class="tab-btn active" data-market="gold">🥇 黃金</button>
+            <button class="tab-btn" data-market="btc">₿ 比特幣</button>
+            <button class="tab-btn" data-market="bonds">📜 美債</button>
+        </div>
+
+        <!-- K線圖容器 -->
+        <div class="chart-container">
+            <div id="chart-global" class="chart active"></div>
+            <div id="chart-nasdaq" class="chart"></div>
+            <div id="chart-twii" class="chart"></div>
+            <div id="chart-gold" class="chart"></div>
+            <div id="chart-btc" class="chart"></div>
+            <div id="chart-bonds" class="chart"></div>
+        </div>
+
+        <!-- 時間範圍選擇 -->
+        <div class="period-selector">
+            <button class="period-btn" data-period="3mo">3個月</button>
+            <button class="period-btn" data-period="6mo">6個月</button>
+            <button class="period-btn active" data-period="1y">1年</button>
+            <button class="period-btn" data-period="2y">2年</button>
+            <button class="period-btn" data-period="5y">5年</button>
+        </div>
+
+        <!-- 載入狀態 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在載入市場數據...</p>
+        </div>
+
+        <!-- 匯率資訊 -->
+        <div class="footer-info">
+            <span id="exchange-rate">USD/TWD: 載入中...</span>
+            <span id="last-update">最後更新: -</span>
+        </div>
+    </div>
+
+    <script src="/static/js/chart.js"></script>
+</body>
+</html>

@@ -1,1 +1,1 @@
-# Utils package for FinBuddy
+# Utils package

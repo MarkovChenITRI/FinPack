@@ -1,3 +1,0 @@
-[submodule "searxng-docker"]
-	path = searxng-docker
-	url = https://github.com/searxng/searxng-docker.git
