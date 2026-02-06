@@ -1,5 +1,14 @@
 /**
- * ===== 交易回測引擎 =====
+ * BacktestEngine - 交易回測引擎
+ * 
+ * 職責：
+ *   - runBacktest()      執行回測（購賣模擬、計算墠值曲線）
+ *   - selectStocksByRanking()  依排名選股
+ *   - calculateReturns()       計算報酬率與績效指標
+ * 
+ * 數據來源：
+ *   - 價格: /api/backtest/prices → stock_cache.aligned_data
+ *   - 排名: industryDataCache.getFullRanking() → sharpe_matrix/slope_matrix
  */
 import { industryDataCache } from './IndustryDataCache.js';
 
@@ -359,10 +368,25 @@ export class BacktestEngine {
             if (usePositionSwap && isRebalanceDay && rankingMap) {
                 const topStocks = this.getTopStocks(date, validTickers);
                 
+                // Debug: 輸出持倉騰換診斷資訊
+                if (Object.keys(holdings).length > 0) {
+                    console.log(`📊 [${date}] 持倉騰換診斷:`);
+                    console.log(`  - 當前持股: ${Object.keys(holdings).join(', ')}`);
+                    console.log(`  - Top ${this.settings.topN} 股票: ${topStocks.join(', ')}`);
+                    console.log(`  - rankingMap 大小: ${rankingMap.size}`);
+                }
+                
                 // 找出還沒持有但在 Top N 的新股票及其排名
                 const newTopStocks = topStocks
                     .filter(t => !holdings[t])
                     .map(t => ({ ticker: t, rank: rankingMap.get(t) || 999 }));
+                
+                // Debug: 輸出新候選股和持股排名
+                if (Object.keys(holdings).length > 0) {
+                    console.log(`  - 新候選股 (未持有): ${newTopStocks.map(s => `${s.ticker}(排名${s.rank})`).join(', ') || '無'}`);
+                    const holdingRanks = Object.keys(holdings).map(t => `${t}(排名${rankingMap.get(t) || 999})`);
+                    console.log(`  - 持股排名: ${holdingRanks.join(', ')}`);
+                }
                 
                 if (newTopStocks.length > 0) {
                     // 找出持倉中排名較差的股票（且不在待賣出列表中）
@@ -638,46 +662,41 @@ export class BacktestEngine {
     }
     
     /**
-     * 從快取取得排名資料（不使用 fallback）
-     * @param {string} date - 日期 (YYYY-MM-DD)
-     * @param {string} dataType - 資料類型 ('sharpe' 或 'slope')
-     * @returns {Object} 排名資料
+     * 取得單一指標的排名股票（使用完整排名表）
+     * @param {string} date - 日期
+     * @param {string[]} validTickers - 有效的股票列表
+     * @param {string} metric - 'sharpe' 或 'growth'
+     * @returns {Array<{ticker: string, rank: number, value: number, industry: string}>} 排名資訊
      */
-    getRankingData(date, dataType) {
+    getRankingByMetric(date, validTickers, metric) {
+        // 取得該市場對應的模式
         const marketModeMap = {
             'global': 'global',
             'us': 'nasdaq',
             'tw': 'twii'
         };
-        const cacheMode = marketModeMap[this.settings.market] || 'global';
-        const result = industryDataCache.precomputed[cacheMode]?.[dataType]?.[date];
-        return result || { date: null, industries: [], top_stocks: [] };
-    }
-    
-    /**
-     * 取得單一指標的排名股票
-     * @param {string} date - 日期
-     * @param {string[]} validTickers - 有效的股票列表
-     * @param {string} metric - 'sharpe' 或 'growth'
-     * @returns {Array<{ticker: string, rank: number, value: number}>} 排名資訊
-     */
-    getRankingByMetric(date, validTickers, metric) {
-        const dataType = metric === 'growth' ? 'slope' : 'sharpe';
-        const data = this.getRankingData(date, dataType);
+        const mode = marketModeMap[this.settings.market] || 'global';
         
-        if (!data?.top_stocks) return [];
+        // 使用新的 getFullRanking 方法取得完整排名表
+        const rankingMap = industryDataCache.getFullRanking(date, metric, mode);
         
+        // 過濾出有效股票並組成排名陣列
         const ranked = [];
-        data.top_stocks.forEach((s, index) => {
-            if (validTickers.includes(s.ticker)) {
+        validTickers.forEach(ticker => {
+            const ranking = rankingMap.get(ticker);
+            if (ranking) {
+                const info = industryDataCache.getStockInfo(ticker);
                 ranked.push({
-                    ticker: s.ticker,
-                    rank: index + 1,
-                    value: s.sharpe || s.slope || 0,
-                    industry: s.industry || '未知'
+                    ticker,
+                    rank: ranking.rank,
+                    value: ranking.value,
+                    industry: info?.industry || '未知'
                 });
             }
         });
+        
+        // 按排名排序
+        ranked.sort((a, b) => a.rank - b.rank);
         
         return ranked;
     }

@@ -1,6 +1,14 @@
 /**
- * MarketChart - K線圖互動模組
- * 使用 Lightweight Charts (TradingView)
+ * MarketChart - K 線圖模組 (Lightweight Charts)
+ * 
+ * 職責：
+ *   - init()               初始化圖表
+ *   - setData(data)        設定 OHLCV 數據
+ *   - handleCrosshairMove(param)  滑鼠移動時更新資訊面板 + 發送事件
+ *   - emitDateChange(data)        發送 kline-date-change 事件
+ *   - lockDate(data)              點擊鎖定日期 (用於交易模擬器)
+ * 
+ * 數據來源：/api/market-data → stock_cache.aligned_data
  */
 export class MarketChart {
     constructor(containerId, market, title) {

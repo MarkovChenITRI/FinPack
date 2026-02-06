@@ -1,3 +1,34 @@
+<!--
+================================================================================
+index.html - FinPack 主頁面
+
+【資料流概覽】
+    後端 API:
+      /api/market-data     → K 線圖 (MarketChart)
+      /api/industry/data   → Sharpe/Slope 柱狀圖 (IndustryDataCache → IndustryBarChart)
+      /api/stock-price     → 交易模擬器 (TradeSimulator)
+      /api/backtest/prices → 回測引擎 (BacktestEngine)
+
+    前端模組:
+      main.js → FinPackApp.init()
+        ├── MarketChart (6 個 K 線圖)
+        ├── IndustryDataCache (預計算 Top 15)
+        ├── IndustryBarChart (Sharpe/Slope 柱狀圖)
+        ├── TradeSimulator (交易模擬器)
+        └── BacktestEngine (回測引擎)
+
+【DOM 結構】
+    #chart-global/nasdaq/twii  K 線圖容器 (Lightweight Charts)
+    #industry-bar-chart        Sharpe Top 15 柱狀圖 (Chart.js)
+    #slope-bar-chart           增長率 Top 15 柱狀圖 (Chart.js)
+    #trade-simulator           交易模擬器面板
+    #backtest-panel            回測引擎面板
+
+【事件流】
+    滑鼠移動 K 線圖 → kline-date-change → 更新柱狀圖
+    點擊 K 線圖 → kline-date-locked → 鎖定交易日期
+================================================================================
+-->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>

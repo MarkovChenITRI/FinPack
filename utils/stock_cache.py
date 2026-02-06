@@ -1,92 +1,75 @@
 """
-股票數據快取模組 - 預載入 TradingView 清單中的所有股票歷史資料
+股票數據快取模組 - 系統核心數據來源
 
 ================================================================================
-                              系統設計規範（重要）
+                                 架構概覽
 ================================================================================
 
-【初始化資料抓取原則】⚠️ 極重要 ⚠️
-    ✅ 所有股票資料必須在初始化時一次抓取完成：
-       - 市場指數（^IXIC, ^TWII, GC=F, BTC-USD, TLT）
-       - 所有 TradingView watchlist 中的個股
-       - 統一抓取 6 年資料（指標計算需要 1 年，實際可用 5 年）
-    
-    ✅ 抓取後立即儲存到 pickle 快取：
-       - 避免重複呼叫 yfinance API
-       - 減少 API 用量和被封鎖風險
-    
-    ❌ 禁止在需要時才動態抓取：
-       - 不要在 API 請求時才去抓個股資料
-       - 不要在計算指標時才去抓歷史資料
-       - 這樣做會導致 API 用量爆炸！
-    
-    📅 資料期間說明：
-       - 抓取期間：6 年（period="6y"）
-       - 指標計算消耗：約 252 天（1 年滾動窗口）
-       - 實際可用：約 5 年回測資料
+【數據流】
+    yfinance API → raw_data (OHLCV) → pickle 快取
+                          ↓
+    _align_data_with_bfill() → aligned_data (日期對齊)
+                          ↓
+    _calculate_all_indicators() → sharpe_matrix, slope_matrix
 
-【快取儲存原則】
-    ✅ 快取只存「原始資料」：
-       - OHLCV（Open, High, Low, Close, Volume）
-       - watchlist（產業分類結構）
-       - stock_info（股票基本資訊：國家、產業、交易所）
-       - last_update（最後更新時間）
-    
-    ❌ 快取禁止存「衍生指標」：
-       - Sharpe Ratio（需動態計算）
-       - Sharpe Daily Change（需動態計算）
-       - Returns（需動態計算）
-       - 任何基於原始資料計算出來的指標
+【關鍵屬性】
+    raw_data       原始 OHLCV (dict[ticker] → DataFrame)
+    aligned_data   日期對齊後的 OHLCV (dict[ticker] → DataFrame)
+    sharpe_matrix  Sharpe Ratio 矩陣 (DataFrame: 日期 × 股票)
+    slope_matrix   排名變化矩陣 (DataFrame: 日期 × 股票)
 
-【衍生指標計算原則】
-    - 所有衍生指標必須在 _calculate_all_indicators() 中計算
-    - 每次載入快取後都會重新計算衍生指標
-    - 這樣設計的好處：
-      1. 快取檔案更小
-      2. 修改計算邏輯不需重新下載資料
-      3. 新增指標只需修改計算函數
-      4. 資料儲存與計算邏輯完全分離
-
-【修改注意事項】
-    - 新增指標時，在 _calculate_all_indicators() 中添加計算邏輯
-    - 不要在 _save_to_cache() 中加入任何衍生指標
-    - 不要在 _fetch_stock_history() 中計算任何指標
-    - raw_data 中的 DataFrame 只能有 OHLCV 五個欄位
+【元件數據對應表】⚠️ 所有元件必須使用相同數據來源
+    ┌───────────────────┬─────────────────────────────────────┐
+    │ 元件              │ 數據來源                            │
+    ├───────────────────┼─────────────────────────────────────┤
+    │ K 線圖            │ aligned_data                        │
+    │ Sharpe 柱狀圖     │ sharpe_matrix                       │
+    │ 增長率柱狀圖      │ slope_matrix                        │
+    │ 交易模擬器        │ aligned_data                        │
+    │ 回測引擎-價格     │ aligned_data                        │
+    │ 回測引擎-排名     │ sharpe_matrix / slope_matrix        │
+    └───────────────────┴─────────────────────────────────────┘
 
 ================================================================================
-                              計算公式說明
+                                 設計原則
 ================================================================================
 
-【Sharpe Ratio（夏普比率）】
-    用途：衡量風險調整後報酬，值越高代表報酬/風險比越好
-    
-    公式：
-        Sharpe = (滾動平均超額報酬 / 滾動標準差) × √252
-    
-    其中：
-        - 超額報酬 = 日報酬率 - 日無風險利率
-        - 日無風險利率 = 年無風險利率(4%) / 252
-        - 滾動視窗 = 252 天（約一年交易日）
-    
-    解讀：
-        - Sharpe > 1：優良
-        - Sharpe > 2：非常優秀
-        - Sharpe < 0：虧損
+【快取原則】
+    ✅ 快取：raw_data, watchlist, stock_info, last_update
+    ❌ 不快取：sharpe_matrix, slope_matrix（每次載入重算）
 
-【Sharpe Daily Change（夏普單日變化）】
-    用途：找出「當紅炸子雞」- 當前市場中 Sharpe 增長最快的股票
-    
-    公式：
-        Daily Change = Sharpe(today) - Sharpe(yesterday)
-    
-    特點：
-        - 使用簡單差值，不是線性回歸斜率
-        - 不過濾 Sharpe > 0，因為目標是找增長最快的股票
-        - 即使 Sharpe 為負但正在快速回升，也會被納入
-    
-    ⚠️ 注意：這與 src/stock.py 中用於 MA 計算的 Sharpe_Slope（365天斜率）不同！
-        - 前端「增長率 Top 15」：使用此處的 Daily Change
-        - 後端買進建議：使用 src/stock.py 的 365 天線性回歸斜率
+【日期對齊】
+    不同市場交易日不同 → _align_data_with_bfill() 統一日期
+    1. 過濾有效交易日（≥50 支股票有資料）
+    2. 每支股票 reindex 到統一日期
+    3. bfill().ffill() 填補缺失值
+
+【Inf/NaN 處理】
+    _calculate_sharpe(): rolling_std=0 → Inf → NaN
+    sharpe_matrix: Inf/-Inf → NaN → bfill/ffill
+    slope_matrix: 第一行 NaN → 0
+    API clean_nan(): NaN/Inf → JSON null
+
+【修改注意】
+    - 新增指標：修改 _calculate_all_indicators()
+    - 禁止在 _save_to_cache() 存衍生指標
+    - 禁止在 _fetch_stock_history() 計算指標
+
+================================================================================
+                                 公式說明
+================================================================================
+
+【Sharpe Ratio】
+    Sharpe = (滾動平均超額報酬 / 滾動標準差) × √252
+    - 超額報酬 = 日報酬率 - 日無風險利率(4%/252)
+    - 滾動視窗 = 252 天
+    - 解讀：>1 優良，>2 優秀，<0 虧損
+
+【Ranking Change（排名變化）】
+    Ranking Change = Sharpe排名(yesterday) - Sharpe排名(today)
+    - +10 = 排名上升 10 位
+    - -5 = 排名下降 5 位
+    - 前端顯示為「增長率 Top 15」
 
 ================================================================================
 """
@@ -128,8 +111,10 @@ class StockDataCache:
         # 衍生資料（動態計算，禁止快取！）
         # 這些資料在每次載入後由 _calculate_all_indicators() 計算
         # ====================================================================
-        self.sharpe_matrix = None   # 由 raw_data 計算得出
-        self.slope_matrix = None    # Sharpe 單日變化（today - yesterday）
+        self.aligned_data = {}      # 對齊日期後的資料（用 bfill 填補）
+        self.unified_dates = None   # 統一日期索引
+        self.sharpe_matrix = None   # 由 aligned_data 計算得出
+        self.slope_matrix = None    # Sharpe 排名變化（昨天排名 - 今天排名）
         self.initialized = False
         
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -141,17 +126,27 @@ class StockDataCache:
         """載入快取或重新抓取資料"""
         if not force_refresh and self._load_from_cache():
             print(f"✅ 從快取載入原始資料 (最後更新: {self.last_update})")
+            print(f"  📦 raw_data: {len(self.raw_data)} 檔股票")
         else:
             print("📥 開始抓取股票資料...")
             self._fetch_all_data()
             self._save_to_cache()
             print(f"✅ 股票資料抓取完成 ({len(self.raw_data)} 檔股票)")
         
-        # 載入後計算衍生指標
+        # 統一對齊所有股票的日期（用 bfill 填補）
+        print("📅 對齊股票日期（bfill）...")
+        self._align_data_with_bfill()
+        print(f"✅ 日期對齊完成")
+        print(f"  📅 unified_dates: {len(self.unified_dates) if self.unified_dates is not None else 0} 個交易日")
+        print(f"  📦 aligned_data: {len(self.aligned_data)} 檔股票")
+        
+        # 載入後計算衍生指標（基於對齊後的資料）
         print("📊 計算衍生指標...")
         self._calculate_all_indicators()
         self.initialized = True
         print(f"✅ 指標計算完成")
+        print(f"  📊 sharpe_matrix: {self.sharpe_matrix.shape if self.sharpe_matrix is not None and not self.sharpe_matrix.empty else 'None/Empty'}")
+        print(f"  📊 slope_matrix: {self.slope_matrix.shape if self.slope_matrix is not None and not self.slope_matrix.empty else 'None/Empty'}")
     
     # ===== 快取管理 =====
     
@@ -345,6 +340,74 @@ class StockDataCache:
         self.last_update = datetime.now()
     
     # =========================================================================
+    # 日期對齊
+    # =========================================================================
+    
+    def _align_data_with_bfill(self):
+        """
+        對齊所有股票的日期，並用 bfill 填補空缺
+        
+        不同市場有不同的交易日（如週末只有 BTC-USD 有資料），
+        這會導致計算 slope/ranking 時出現大量 NaN。
+        
+        解決方案：
+        1. 建立統一日期索引（所有股票日期的聯集）
+        2. 過濾出「有效交易日」（≥50 支股票有資料的日子）
+        3. 每支股票 reindex 到統一日期
+        4. 使用 bfill (backward fill) 填補缺失值
+        
+        這確保所有指標計算都基於相同的日期基準。
+        """
+        if not self.raw_data:
+            self.aligned_data = {}
+            self.unified_dates = pd.DatetimeIndex([])
+            return
+        
+        # Step 1: 收集所有日期，並統計每個日期有多少股票有資料
+        date_stock_count = {}
+        for ticker, df in self.raw_data.items():
+            if df.empty:
+                continue
+            for date in df.index:
+                date_stock_count[date] = date_stock_count.get(date, 0) + 1
+        
+        # Step 2: 過濾出有效交易日（≥50 支股票有資料）
+        # 這會排除週末（只有加密貨幣交易）和其他非主要交易日
+        MIN_STOCKS_FOR_VALID_DAY = 50
+        valid_dates = [
+            date for date, count in date_stock_count.items()
+            if count >= MIN_STOCKS_FOR_VALID_DAY
+        ]
+        
+        if not valid_dates:
+            # 如果沒有有效日期（股票太少），使用所有日期
+            valid_dates = list(date_stock_count.keys())
+        
+        self.unified_dates = pd.DatetimeIndex(sorted(valid_dates))
+        
+        # Step 3: 對齊每支股票的資料
+        self.aligned_data = {}
+        for ticker, df in self.raw_data.items():
+            if df.empty:
+                continue
+            
+            # Reindex 到統一日期，然後 bfill
+            # bfill: 用「下一個有效值」填補空缺
+            # 這對股票合理：假日用前一個交易日的收盤價
+            aligned_df = df.reindex(self.unified_dates).bfill()
+            
+            # 對於開頭的 NaN（沒有後續值可 bfill），用 ffill 補
+            aligned_df = aligned_df.ffill()
+            
+            self.aligned_data[ticker] = aligned_df
+        
+        # 記錄過濾掉的日期數量（debug 用）
+        total_dates = len(date_stock_count)
+        filtered_dates = total_dates - len(self.unified_dates)
+        if filtered_dates > 0:
+            print(f"  📅 過濾掉 {filtered_dates} 個非主要交易日（如週末）")
+
+    # =========================================================================
     # 衍生指標計算區
     # =========================================================================
     # 所有衍生指標的計算邏輯都放在這裡
@@ -366,21 +429,44 @@ class StockDataCache:
         rolling_mean = excess_returns.rolling(self.SHARPE_WINDOW).mean()
         rolling_std = excess_returns.rolling(self.SHARPE_WINDOW).std()
         
+        # 避免除以零產生 Inf
+        rolling_std = rolling_std.replace(0, np.nan)
+        
         sharpe = rolling_mean / rolling_std * np.sqrt(self.SHARPE_WINDOW)
+        
+        # 將 Inf/-Inf 替換為 NaN，然後用 bfill 填補
+        sharpe = sharpe.replace([np.inf, -np.inf], np.nan)
+        sharpe = sharpe.bfill().ffill()
+        
         return sharpe
     
-    def _calculate_daily_change(self, series: pd.Series) -> pd.Series:
+    def _calculate_ranking_change(self, sharpe_matrix: pd.DataFrame) -> pd.DataFrame:
         """
-        計算單日變化量（today - yesterday）
+        計算 Sharpe 排名變化（前一交易日排名 - 今天排名）
         
-        用於前端「增長率 Top 15」顯示，找出當紅炸子雞
-        不過濾 Sharpe > 0，因為目標是找出增長最快的股票
+        正值表示排名上升（例：從 #20 升到 #10 = +10）
+        負值表示排名下降
+        
+        用於前端「增長率 Top 15」顯示，找出排名快速上升的股票
+        這比單日數值變化更有意義，能真正反映「誰在崛起」
+        
+        注意：因為 aligned_data 已經過濾掉週末等非主要交易日，
+        這裡直接 shift(1) 就是正確的前一交易日。
         """
-        if series.empty:
-            return pd.Series(dtype=float)
+        if sharpe_matrix.empty:
+            return pd.DataFrame()
         
-        # 簡單的日差值：今天 - 昨天
-        return series.diff()
+        # 計算每日排名（1 = 最高 Sharpe，數字越小越好）
+        # ascending=False: Sharpe 越高排名越前
+        # method='min': 相同值給相同排名
+        ranking_matrix = sharpe_matrix.rank(axis=1, ascending=False, method='min')
+        
+        # 計算排名變化：前一交易日排名 - 今天排名
+        # 正值 = 排名上升（從 20 升到 10 = 20-10 = +10）
+        # 負值 = 排名下降（從 10 降到 20 = 10-20 = -10）
+        ranking_change = ranking_matrix.shift(1) - ranking_matrix
+        
+        return ranking_change
     
     def _calculate_all_indicators(self):
         """
@@ -389,33 +475,48 @@ class StockDataCache:
         這是衍生指標的唯一計算入口點！
         新增指標時，在這裡添加計算邏輯。
         
+        重要：使用 aligned_data（對齊後的資料）計算，確保所有日期一致。
+        
         目前計算的指標：
         - sharpe_matrix: 滾動 Sharpe Ratio（252天視窗）
-        - slope_matrix: Sharpe 單日變化（today - yesterday），用於找當紅炸子雞
+        - slope_matrix: Sharpe 排名變化（昨天排名 - 今天排名），找出排名快速上升的股票
+                        正值 = 排名上升（例：+10 表示從第 20 名升到第 10 名）
+                        負值 = 排名下降
         """
         sharpe_data = {}
-        slope_data = {}
         
-        for ticker, df in self.raw_data.items():
+        print(f"  📊 aligned_data 有 {len(self.aligned_data)} 檔股票")
+        
+        # 使用對齊後的資料計算（確保所有股票日期一致）
+        for ticker, df in self.aligned_data.items():
             if 'Close' not in df.columns:
+                print(f"    ⚠️ {ticker} 沒有 Close 欄位，跳過")
                 continue
             
             # 計算 Sharpe
             sharpe = self._calculate_sharpe(df['Close'])
             sharpe_data[ticker] = sharpe
-            
-            # 計算 Sharpe 單日變化（不是 365 天斜率！）
-            daily_change = self._calculate_daily_change(sharpe)
-            slope_data[ticker] = daily_change
         
-        # 建立矩陣
+        # 建立 Sharpe 矩陣
         if sharpe_data:
             self.sharpe_matrix = pd.DataFrame(sharpe_data).sort_index()
-        
-        if slope_data:
-            self.slope_matrix = pd.DataFrame(slope_data).sort_index()
+            
+            # 將任何剩餘的 Inf 替換為 NaN，然後用 bfill/ffill 填補
+            self.sharpe_matrix = self.sharpe_matrix.replace([np.inf, -np.inf], np.nan)
+            self.sharpe_matrix = self.sharpe_matrix.bfill().ffill()
+            
+            # 計算排名變化（基於完整的 sharpe_matrix）
+            # 因為日期已經對齊，不會有週末等非主要交易日的問題
+            self.slope_matrix = self._calculate_ranking_change(self.sharpe_matrix)
+            
+            # slope_matrix 第一行會是 NaN（沒有前一天），用 0 填補
+            self.slope_matrix = self.slope_matrix.fillna(0)
+        else:
+            self.sharpe_matrix = pd.DataFrame()
+            self.slope_matrix = pd.DataFrame()
     
     # ===== 查詢方法 =====
+    # 注意：所有查詢方法都使用 aligned_data（對齊後的資料）
     
     def get_stock_info(self, ticker: str) -> dict:
         """取得股票資訊"""
@@ -423,26 +524,118 @@ class StockDataCache:
     
     def get_all_tickers(self) -> list:
         """取得所有股票代碼"""
-        return list(self.raw_data.keys())
+        return list(self.aligned_data.keys())
     
     def get_tickers_by_country(self, country: str) -> list:
         """依國家篩選股票"""
         return [
             ticker for ticker, info in self.stock_info.items()
-            if info.get('country') == country and ticker in self.raw_data
+            if info.get('country') == country and ticker in self.aligned_data
         ]
     
     def get_tickers_by_industry(self, industry: str) -> list:
         """依產業篩選股票"""
         return [
             ticker for ticker, info in self.stock_info.items()
-            if info.get('industry') == industry and ticker in self.raw_data
+            if info.get('industry') == industry and ticker in self.aligned_data
         ]
     
     def get_industries(self) -> list:
         """取得所有產業名稱"""
         return list(self.watchlist.keys())
     
+    def get_stock_sharpe(self, ticker: str) -> pd.Series:
+        """
+        取得單一股票的 Sharpe 時間序列
+        
+        Args:
+            ticker: 股票代碼
+            
+        Returns:
+            Series with date index and sharpe values
+        """
+        if self.sharpe_matrix is None or ticker not in self.sharpe_matrix.columns:
+            return pd.Series(dtype=float)
+        
+        return self.sharpe_matrix[ticker]
+    
+    def get_sharpe_matrix(self, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        """
+        取得 Sharpe 矩陣（可選日期範圍）
+        
+        Args:
+            start_date: 開始日期 (YYYY-MM-DD)
+            end_date: 結束日期 (YYYY-MM-DD)
+            
+        Returns:
+            DataFrame with date index and ticker columns
+        """
+        if self.sharpe_matrix is None:
+            return pd.DataFrame()
+        
+        df = self.sharpe_matrix.copy()
+        
+        if start_date:
+            df = df[df.index >= start_date]
+        if end_date:
+            df = df[df.index <= end_date]
+        
+        return df
+    
+    def get_daily_sharpe_summary(self, date: str = None) -> dict:
+        """
+        取得特定日期的 Sharpe 摘要（按國家分組）
+        
+        Args:
+            date: 日期 (YYYY-MM-DD)，None 則使用最新日期
+            
+        Returns:
+            {
+                'date': '2026-02-05',
+                'US': {'count': 30, 'mean': 1.2, 'max': 2.5, 'top3': [...]},
+                'TW': {'count': 20, 'mean': 0.8, 'max': 1.8, 'top3': [...]}
+            }
+        """
+        if self.sharpe_matrix is None or self.sharpe_matrix.empty:
+            return {'date': None, 'US': {}, 'TW': {}}
+        
+        # 找到目標日期的資料
+        if date:
+            target_str = str(date)[:10]
+            matched_dates = [d for d in self.sharpe_matrix.index if str(d)[:10] == target_str]
+            if not matched_dates:
+                return {'date': date, 'US': {}, 'TW': {}}
+            actual_date = matched_dates[0]
+        else:
+            actual_date = self.sharpe_matrix.index[-1]
+        
+        row = self.sharpe_matrix.loc[actual_date]
+        
+        us_tickers = set(self.get_tickers_by_country('US'))
+        tw_tickers = set(self.get_tickers_by_country('TW'))
+        
+        def summarize(tickers_set):
+            values = row[row.index.isin(tickers_set)].dropna()
+            if values.empty:
+                return {'count': 0, 'mean': 0, 'max': 0, 'top3': []}
+            
+            top3 = values.nlargest(3)
+            return {
+                'count': len(values),
+                'mean': round(values.mean(), 3),
+                'max': round(values.max(), 3),
+                'top3': [
+                    {'ticker': t, 'sharpe': round(v, 3)}
+                    for t, v in top3.items()
+                ]
+            }
+        
+        return {
+            'date': str(actual_date)[:10],
+            'US': summarize(us_tickers),
+            'TW': summarize(tw_tickers)
+        }
+
     def get_stock_price(self, ticker: str, date: str) -> dict:
         """
         取得股票在特定日期的價格資訊
@@ -462,10 +655,10 @@ class StockDataCache:
                 'country': 'US'
             }
         """
-        if ticker not in self.raw_data:
+        if ticker not in self.aligned_data:
             return {'error': f'股票 {ticker} 不存在'}
         
-        df = self.raw_data[ticker]
+        df = self.aligned_data[ticker]
         
         # 嘗試找到指定日期
         try:
@@ -496,7 +689,7 @@ class StockDataCache:
     
     def get_stock_ohlcv(self, ticker: str) -> pd.DataFrame:
         """
-        取得股票的完整 OHLCV 資料
+        取得股票的完整 OHLCV 資料（使用對齊後的資料）
         
         Args:
             ticker: 股票代碼
@@ -504,10 +697,10 @@ class StockDataCache:
         Returns:
             DataFrame with OHLCV columns, or None if not found
         """
-        if ticker not in self.raw_data:
+        if ticker not in self.aligned_data:
             return None
         
-        df = self.raw_data[ticker].copy()
+        df = self.aligned_data[ticker].copy()
         # 確保 index 是字串格式的日期
         df.index = df.index.astype(str).str[:10]
         return df

@@ -1,5 +1,13 @@
 /**
  * FinPackApp - 主應用程式
+ * 
+ * 職責：
+ *   - init()       初始化 K 線圖 + 柱狀圖 + 交易模擬器 + 回測引擎
+ *   - updateIndustryCharts()  回應 kline-date-change 事件，更新柱狀圖
+ * 
+ * 事件流：
+ *   滑鼠移動 K 線 → MarketChart.emitDateChange() → kline-date-change
+ *   → updateIndustryCharts() → sharpeChart/slopeChart.loadData()
  */
 import { MarketChart } from './MarketChart.js';
 import { IndustryBarChart } from './IndustryBarChart.js';

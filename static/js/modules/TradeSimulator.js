@@ -1,11 +1,16 @@
 /**
- * 交易模擬器
+ * TradeSimulator - 交易模擬器
  * 
- * 功能：
- * - 設定初始本金（台幣）
- * - 買入/賣出股票（買入用最高價，賣出用最低價）
- * - 記錄交易歷史
- * - 即時計算持倉市值和損益
+ * 職責：
+ *   - loadStockList()   載入股票清單
+ *   - submitTrade()     執行買入/賣出
+ *   - updateDisplay()   更新持倉市值與損益
+ * 
+ * 數據來源：
+ *   - 股票清單: /api/stocks → stock_cache.get_all_tickers()
+ *   - 交易價格: /api/stock-price/{ticker} → stock_cache.aligned_data
+ * 
+ * 價格使用：買入用 high，賣出用 low（保守估計）
  */
 export class TradeSimulator {
     constructor(exchangeRate = 32.0) {

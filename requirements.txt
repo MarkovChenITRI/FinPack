@@ -1,4 +1,12 @@
 # FinPack 相依套件
+# 架構說明見 README.md
+#
+# 核心套件：
+#   flask     Web 服務器
+#   yfinance  股票數據下載
+#   pandas    數據處理 (DataFrame, 矩陣運算)
+#   numpy     數學運算
+
 flask>=2.3.0
 yfinance>=0.2.28
 pandas>=2.0.0

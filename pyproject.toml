@@ -1,7 +1,10 @@
+# FinPack 專案配置
+# 詳細架構說明見 README.md
+
 [project]
 name = "finpack"
 version = "0.1.0"
-description = "Add your description here"
+description = "全球市場看盤與回測系統 - Sharpe Ratio 分析、交易模擬、回測引擎"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

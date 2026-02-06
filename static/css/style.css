@@ -1,4 +1,20 @@
-/* FinPack 全球市場看盤 - 樣式表 */
+/*
+================================================================================
+style.css - FinPack 全域樣式
+
+【對應 DOM 結構】(見 templates/index.html)
+    .navbar           頂部導航列
+    .chart-container  K 線圖容器 (Lightweight Charts)
+    .industry-analysis    柱狀圖區塊 (Chart.js)
+    .trade-simulator      交易模擬器面板
+    .backtest-panel       回測引擎面板
+
+【顏色規範】
+    --accent-green: 上漲/買入
+    --accent-red:   下跌/賣出
+    --accent-blue:  互動元素
+================================================================================
+*/
 
 :root {
     --bg-primary: #0a0e14;

@@ -1,5 +1,8 @@
 """
-市場數據工具 - 提供美股/台股大盤加權K線數據
+市場數據工具 - 大盤指數 K 線數據
+
+提供：NASDAQ(^IXIC), 台灣加權(^TWII), 黃金(GC=F), 比特幣(BTC-USD), 公債(TLT)
+快取：6 小時有效期，存於 cache/market_data.pkl
 """
 import yfinance as yf
 import pandas as pd

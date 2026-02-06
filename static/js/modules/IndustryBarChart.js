@@ -1,5 +1,12 @@
 /**
- * 產業分析橫向長條圖（使用前端快取即時計算）
+ * IndustryBarChart - 產業分布柱狀圖 (Chart.js)
+ * 
+ * 職責：
+ *   - init()            初始化橫向長條圖
+ *   - loadData(mode, date)  從 industryDataCache 查表並更新圖表
+ *   - updateChart(data)     繪製產業分布
+ * 
+ * 數據來源：industryDataCache.getTopAnalysis() (純查表，無 API)
  */
 import { industryDataCache } from './IndustryDataCache.js';
 

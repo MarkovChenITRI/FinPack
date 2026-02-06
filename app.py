@@ -1,6 +1,15 @@
 """
-FinPack WebUI - 全球市場看盤模擬器
-Flask 應用程式進入點
+FinPack WebUI - Flask 後端 API
+
+API 路由：
+    /api/market-data      K 線圖數據
+    /api/industry/data    Sharpe/Slope 矩陣
+    /api/stock-price      交易價格查詢
+    /api/backtest/prices  回測價格批量查詢
+    /api/stocks           股票清單
+
+數據來源：所有 API 使用 stock_cache (見 utils/stock_cache.py)
+JSON 處理：clean_nan() 將 NaN/Inf 轉為 null
 """
 import pandas as pd
 from flask import Flask, render_template, jsonify, request
@@ -311,7 +320,7 @@ def get_industry_data():
     """
     API: 獲取完整的產業分析資料（供前端快取使用）
     
-    一次性返回所有日期的 Sharpe 和 Slope 矩陣，讓前端可以即時計算 Top 15
+    一次性返回所有日期的 Sharpe 和排名變化矩陣，讓前端可以即時計算 Top 15
     
     Query Parameters:
         period: 時間範圍 (3mo, 6mo, 1y)，預設 1y
@@ -322,13 +331,14 @@ def get_industry_data():
             "tickers": ["AAPL", "GOOGL", ...],
             "stockInfo": {"AAPL": {"country": "US", "industry": "Tech"}, ...},
             "sharpe": [[1.2, 0.8, ...], ...],  # 每日每股的 Sharpe
-            "slope": [[0.01, -0.02, ...], ...]  # 每日每股的 Slope
+            "slope": [[10, -5, ...], ...]  # 每日每股的排名變化（正值=上升，如 +10 表示排名上升 10 位）
         }
     """
     import pandas as pd
     from datetime import datetime, timedelta
     
     period = request.args.get('period', '1y')
+    print(f"📊 [API] /api/industry/data 請求，period={period}")
     
     # 計算時間範圍
     end_date = datetime.now()
@@ -340,7 +350,11 @@ def get_industry_data():
     sharpe_matrix = stock_cache.sharpe_matrix
     slope_matrix = stock_cache.slope_matrix
     
+    print(f"📊 [API] sharpe_matrix: {sharpe_matrix.shape if sharpe_matrix is not None and not sharpe_matrix.empty else 'None/Empty'}")
+    print(f"📊 [API] slope_matrix: {slope_matrix.shape if slope_matrix is not None and not slope_matrix.empty else 'None/Empty'}")
+    
     if sharpe_matrix is None or sharpe_matrix.empty:
+        print("❌ [API] sharpe_matrix 是空的，返回錯誤")
         return jsonify({
             'error': 'No data available',
             'dates': [],
@@ -354,29 +368,70 @@ def get_industry_data():
     sharpe_filtered = sharpe_matrix[sharpe_matrix.index >= start_date.strftime('%Y-%m-%d')]
     slope_filtered = slope_matrix[slope_matrix.index >= start_date.strftime('%Y-%m-%d')] if slope_matrix is not None else pd.DataFrame()
     
+    print(f"📊 [API] 過濾後: sharpe={sharpe_filtered.shape}, slope={slope_filtered.shape if not slope_filtered.empty else 'Empty'}")
+    
     # 取得共同的 tickers
     tickers = list(sharpe_filtered.columns)
     
     # 取得股票資訊
     stock_info = {}
+    industries_found = set()
+    country_stats = {'US': 0, 'TW': 0, 'empty': 0, 'other': 0}
+    missing_info_count = 0
+    
     for ticker in tickers:
         info = stock_cache.get_stock_info(ticker)
+        if not info:
+            missing_info_count += 1
+        
+        country = info.get('country', '')
+        industry = info.get('industry', '未分類')
+        
         stock_info[ticker] = {
-            'country': info.get('country', ''),
-            'industry': info.get('industry', '未分類')
+            'country': country,
+            'industry': industry
         }
+        
+        # 統計 country
+        if country == 'US':
+            country_stats['US'] += 1
+        elif country == 'TW':
+            country_stats['TW'] += 1
+        elif country == '':
+            country_stats['empty'] += 1
+        else:
+            country_stats['other'] += 1
+            
+        if industry and industry != '未分類':
+            industries_found.add(industry)
+    
+    print(f"📊 [API] 股票資訊: {len(stock_info)} 檔, 產業: {len(industries_found)} 種")
+    print(f"📊 [API] country 分布: {country_stats}")
+    print(f"📊 [API] 缺少 info 的股票: {missing_info_count} 檔")
+    print(f"📊 [API] 產業列表: {list(industries_found)[:5]}...")  # 只顯示前5個
+    
+    # Debug: 檢查最後一天的 sharpe 值
+    last_row = sharpe_filtered.iloc[-1]
+    non_nan_count = last_row.notna().sum()
+    print(f"📊 [API] 最後一天 sharpe: {non_nan_count}/{len(last_row)} 個非 NaN 值")
+    if non_nan_count > 0:
+        sample_values = last_row.dropna().head(5)
+        print(f"📊 [API] sharpe 樣本: {dict(sample_values)}")
     
     # 轉換為 JSON 格式（將 NaN 替換為 None，確保 JSON 相容）
     import math
     dates = [str(d)[:10] for d in sharpe_filtered.index]
     
     def clean_nan(matrix):
-        """將 NaN 替換為 None（JSON null）"""
+        """將 NaN/Inf 替換為 None（JSON null）"""
         result = []
         for row in matrix.values.tolist():
             clean_row = []
             for val in row:
-                if val is None or (isinstance(val, float) and math.isnan(val)):
+                # 處理 None、NaN、Inf、-Inf
+                if val is None:
+                    clean_row.append(None)
+                elif isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
                     clean_row.append(None)
                 else:
                     clean_row.append(round(val, 4) if isinstance(val, float) else val)
@@ -385,6 +440,8 @@ def get_industry_data():
     
     sharpe_data = clean_nan(sharpe_filtered)
     slope_data = clean_nan(slope_filtered) if not slope_filtered.empty else []
+    
+    print(f"✅ [API] 返回資料: {len(dates)} 天, {len(tickers)} 檔股票")
     
     return jsonify({
         'dates': dates,
@@ -594,7 +651,7 @@ def get_industry_top():
 @app.route('/api/industry/slope-top')
 def get_industry_slope_top():
     """
-    API: 獲取 Sharpe Slope (增長率) Top N 的產業分布分析
+    API: 獲取排名變化 Top N 的產業分布分析（排名上升最快的股票）
     
     Query Parameters:
         country: 篩選國家 (US/TW)，不填則全市場
@@ -608,7 +665,8 @@ def get_industry_slope_top():
                 {"name": "半導體", "total": 5, "US": 3, "TW": 2, "stocks": ["NVDA", ...]},
                 ...
             ],
-            "top_stocks": [{"ticker": "NVDA", "slope": 0.005, "country": "US", "industry": "半導體"}, ...]
+            "top_stocks": [{"ticker": "NVDA", "slope": 10, "country": "US", "industry": "半導體"}, ...]
+            // slope 現在是排名變化：+10 表示排名上升 10 位
         }
     """
     from utils.stock_cache import get_slope_top_analysis
