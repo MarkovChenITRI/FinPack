@@ -7,49 +7,38 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Lightweight Charts by TradingView -->
     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Chart.js for bar charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- 標題區 -->
-        <header class="header">
-            <h1>📈 FinPack 全球市場看盤</h1>
-            <p class="subtitle">價值投資 | 資本輪動</p>
-        </header>
+        <!-- 頂部導航列 -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <h1>📈 FinPack</h1>
+            </div>
+            <div class="navbar-menu">
+                <button class="nav-item active" data-category="value">💼 價值投資</button>
+                <button class="nav-item" data-category="rotation">🔄 資本輪動</button>
+            </div>
+            <div class="navbar-info">
+                <span class="market-status" id="market-status">🟢 市場開放</span>
+            </div>
+        </nav>
 
-        <!-- 資訊面板 -->
-        <div class="info-panel">
-            <div class="info-card" id="selected-date-card">
-                <span class="label">選擇日期</span>
-                <span class="value" id="selected-date">點擊K線查看</span>
-            </div>
-            <div class="info-card">
-                <span class="label">開盤</span>
-                <span class="value" id="price-open">-</span>
-            </div>
-            <div class="info-card">
-                <span class="label">最高</span>
-                <span class="value" id="price-high">-</span>
-            </div>
-            <div class="info-card">
-                <span class="label">最低</span>
-                <span class="value" id="price-low">-</span>
-            </div>
-            <div class="info-card">
-                <span class="label">收盤</span>
-                <span class="value" id="price-close">-</span>
-            </div>
-        </div>
-
-        <!-- 分類標籤 -->
-        <div class="category-tabs">
-            <button class="category-btn active" data-category="value">💼 價值投資</button>
-            <button class="category-btn" data-category="rotation">🔄 資本輪動</button>
+        <!-- 時間範圍選擇 -->
+        <div class="period-selector">
+            <button class="period-btn" data-period="3mo">3個月</button>
+            <button class="period-btn" data-period="6mo">6個月</button>
+            <button class="period-btn active" data-period="1y">1年</button>
+            <button class="period-btn" data-period="2y">2年</button>
+            <button class="period-btn" data-period="5y">5年</button>
         </div>
 
         <!-- 圖表切換 - 價值投資 -->
         <div class="chart-tabs" id="tabs-value">
             <button class="tab-btn active" data-market="global">🌍 國際加權</button>
-            <button class="tab-btn" data-market="nasdaq">🇺🇸 NASDAQ</button>
+            <button class="tab-btn" data-market="nasdaq">🇺🇸 美股</button>
             <button class="tab-btn" data-market="twii">🇹🇼 台股</button>
         </div>
 
@@ -60,23 +49,347 @@
             <button class="tab-btn" data-market="bonds">📜 美債</button>
         </div>
 
-        <!-- K線圖容器 -->
-        <div class="chart-container">
-            <div id="chart-global" class="chart active"></div>
-            <div id="chart-nasdaq" class="chart"></div>
-            <div id="chart-twii" class="chart"></div>
+        <!-- 價值投資：K線圖 + 夏普排序 + 增長排序 水平排列 -->
+        <div class="value-investing-layout" id="value-layout">
+            <!-- 左側：K線圖 -->
+            <div class="chart-container chart-container-left">
+                <div id="chart-global" class="chart active"></div>
+                <div id="chart-nasdaq" class="chart"></div>
+                <div id="chart-twii" class="chart"></div>
+            </div>
+            
+            <!-- 中間：Sharpe 排序 -->
+            <div class="industry-analysis" id="industry-sharpe">
+                <h3 class="section-title">📊 Sharpe Top 15</h3>
+                <div class="industry-chart-container">
+                    <canvas id="industry-bar-chart"></canvas>
+                </div>
+                <div class="industry-legend" id="industry-legend"></div>
+            </div>
+            
+            <!-- 右側：Sharpe 增長率排序（限 Sharpe Top 產業） -->
+            <div class="industry-analysis" id="industry-slope">
+                <h3 class="section-title">📈 增長率 Top 15 <span class="section-subtitle" id="slope-filter-hint">(限 Sharpe Top 產業)</span></h3>
+                <div class="industry-chart-container">
+                    <canvas id="slope-bar-chart"></canvas>
+                </div>
+                <div class="industry-legend" id="slope-legend"></div>
+            </div>
+        </div>
+        
+        <!-- 交易模擬器（水平佈局，在圖表下方） -->
+        <div class="trade-simulator-horizontal" id="trade-simulator">
+            <h3 class="section-title">💰 交易模擬器</h3>
+            
+            <div class="trade-simulator-content">
+                <!-- 左側：交易輸入區 + 交易紀錄 -->
+                <div class="trade-left-panel">
+                    <div class="trade-input-area">
+                        <!-- 本金與日期 -->
+                        <div class="trade-row">
+                            <div class="trade-field">
+                                <label class="trade-label">初始本金 (TWD)</label>
+                                <div class="trade-input-group">
+                                    <input type="number" id="initial-capital" value="1000000" min="0" step="10000">
+                                    <button id="reset-capital-btn" class="trade-btn secondary">重設</button>
+                                </div>
+                            </div>
+                            <div class="trade-field">
+                                <label class="trade-label">交易日期</label>
+                                <div class="trade-date-display" id="trade-date">
+                                    <span class="trade-date-value">請點擊 K 線選擇日期</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 交易操作 -->
+                        <div class="trade-row">
+                            <div class="trade-field">
+                                <label class="trade-label">操作</label>
+                                <select id="trade-action" class="trade-select">
+                                    <option value="buy">買入</option>
+                                    <option value="sell">賣出（全部出清）</option>
+                                </select>
+                            </div>
+                            <div class="trade-field flex-2">
+                                <label class="trade-label">選擇股票</label>
+                                <select id="trade-stock" class="trade-select">
+                                    <option value="">-- 選擇股票 --</option>
+                                </select>
+                            </div>
+                            <div class="trade-field" id="trade-amount-field">
+                                <label class="trade-label">金額 (TWD)</label>
+                                <input type="number" id="trade-amount" placeholder="投入金額" min="1000" step="1000" value="100000">
+                            </div>
+                            <div class="trade-field trade-field-btn">
+                                <button id="submit-trade-btn" class="trade-btn primary large">執行交易</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 交易紀錄（在輸入區下方） -->
+                    <div class="trade-history-area">
+                        <label class="trade-label">交易紀錄</label>
+                        <div class="trade-history" id="trade-history">
+                            <div class="trade-history-empty">尚無交易紀錄</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右側：資產摘要 -->
+                <div class="trade-summary-area">
+                    <div class="summary-section">
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <span class="summary-label">現金餘額</span>
+                                <span class="summary-value" id="cash-balance">$1,000,000</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">持倉市值</span>
+                                <span class="summary-value" id="holdings-value">$0</span>
+                            </div>
+                            <div class="summary-item highlight">
+                                <span class="summary-label">總資產</span>
+                                <span class="summary-value" id="total-assets">$1,000,000</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">總損益</span>
+                                <span class="summary-value" id="profit-loss">$0 (0.00%)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 損益明細 -->
+                    <div class="pnl-details">
+                        <label class="trade-label">損益明細</label>
+                        <div class="pnl-summary">
+                            <div class="pnl-row">
+                                <span class="pnl-label">已實現損益</span>
+                                <span class="pnl-value" id="realized-pnl">$0</span>
+                            </div>
+                            <div class="pnl-row">
+                                <span class="pnl-label">未實現損益</span>
+                                <span class="pnl-value" id="unrealized-pnl">$0</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 個別持股損益 -->
+                        <div class="holdings-pnl" id="holdings-pnl">
+                            <div class="holdings-pnl-empty">尚無持倉</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 自動交易回測工具 -->
+        <div class="backtest-tool" id="backtest-tool">
+            <h3 class="section-title">📊 自動交易回測工具</h3>
+            
+            <div class="backtest-content">
+                <!-- 左側：回測設定 -->
+                <div class="backtest-settings">
+                    <!-- 回測參數 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">⚙️ 回測參數</h4>
+                        <div class="backtest-params">
+                            <div class="backtest-field">
+                                <label>初始資金 (TWD)</label>
+                                <input type="number" id="bt-initial-capital" value="1000000" min="100000" step="100000">
+                            </div>
+                            <div class="backtest-field">
+                                <label>起始日期</label>
+                                <input type="date" id="bt-start-date">
+                            </div>
+                            <div class="backtest-field">
+                                <label>結束日期</label>
+                                <input type="date" id="bt-end-date">
+                            </div>
+                            <div class="backtest-field">
+                                <label>再平衡頻率</label>
+                                <select id="bt-rebalance-freq">
+                                    <option value="daily">每日</option>
+                                    <option value="weekly" selected>每週</option>
+                                    <option value="monthly">每月</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 市場選擇 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">🌍 市場選擇</h4>
+                        <div class="backtest-checkboxes">
+                            <label class="backtest-checkbox">
+                                <input type="radio" name="bt-market" value="global" checked>
+                                <span>🌍 國際</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="radio" name="bt-market" value="us">
+                                <span>🇺🇸 美股</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="radio" name="bt-market" value="tw">
+                                <span>🇹🇼 台股</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 買入條件 (多選) -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">📈 買入條件 <small>(可多選組合)</small></h4>
+                        <div class="backtest-buy-rules">
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-buy-rule" value="sharpe" checked>
+                                <span>Sharpe 排名</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-buy-rule" value="growth">
+                                <span>Growth 排名</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-buy-rule" value="industry">
+                                <span>分散產業</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-buy-rule" value="random">
+                                <span>隨機選取</span>
+                            </label>
+                            <div class="backtest-inline-fields">
+                                <div class="backtest-field small">
+                                    <label>選取數量 (N)</label>
+                                    <input type="number" id="bt-top-n" value="5" min="1" max="15">
+                                </div>
+                                <div class="backtest-field small">
+                                    <label>每檔投入金額</label>
+                                    <input type="number" id="bt-amount-per-stock" value="100000" min="10000" step="10000">
+                                </div>
+                                <div class="backtest-field small">
+                                    <label>最大持倉數</label>
+                                    <input type="number" id="bt-max-positions" value="10" min="1" max="30">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 交易成本 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">💰 交易成本</h4>
+                        <div class="backtest-inline-fields">
+                            <div class="backtest-field small">
+                                <label>美股費率 (%)</label>
+                                <input type="number" id="bt-us-fee-rate" value="0.3" min="0" max="2" step="0.01">
+                            </div>
+                            <div class="backtest-field small">
+                                <label>美股最低 (USD)</label>
+                                <input type="number" id="bt-us-min-fee" value="15" min="0" max="50" step="1">
+                            </div>
+                            <div class="backtest-field small">
+                                <label>台股費率 (%)</label>
+                                <input type="number" id="bt-tw-fee-rate" value="0.6" min="0" max="2" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 賣出條件 (持續買進策略) -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">📉 賣出條件 <small>(可多選組合)</small></h4>
+                        <div class="backtest-sell-rules">
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-sell-rule" value="ranking-drop" checked>
+                                <span>排名掉落：連續</span>
+                                <input type="number" id="bt-ranking-drop-periods" value="2" min="1" max="10" class="inline-input">
+                                <span>個週期不在 Top</span>
+                                <input type="number" id="bt-ranking-threshold" value="20" min="5" max="100" class="inline-input">
+                                <span>名</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-sell-rule" value="position-swap" checked>
+                                <span>持倉騰換：持倉已滿時，賣出排名最低的股票</span>
+                            </label>
+                            <label class="backtest-checkbox">
+                                <input type="checkbox" name="bt-sell-rule" value="emergency-stop">
+                                <span>異常停損：虧損超過</span>
+                                <input type="number" id="bt-emergency-stop" value="50" min="20" max="80" class="inline-input"> %
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 執行按鈕 -->
+                    <div class="backtest-actions">
+                        <button id="bt-run-btn" class="backtest-btn primary">🚀 開始回測</button>
+                        <button id="bt-reset-btn" class="backtest-btn secondary">🔄 重置</button>
+                    </div>
+                </div>
+
+                <!-- 右側：回測結果 -->
+                <div class="backtest-results">
+                    <!-- 績效指標 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">📊 績效指標</h4>
+                        <div class="backtest-metrics">
+                            <div class="metric-card">
+                                <span class="metric-label">總報酬</span>
+                                <span class="metric-value" id="bt-total-return">-</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">年化報酬</span>
+                                <span class="metric-value" id="bt-annual-return">-</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">最大回撤</span>
+                                <span class="metric-value" id="bt-max-drawdown">-</span>
+                            </div>
+                            <div class="metric-card" title="策略夏普比率 / 國際加權指數夏普比率，>1 表示優於市場">
+                                <span class="metric-label">vs 市場</span>
+                                <span class="metric-value" id="bt-sharpe-ratio">-</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">勝率</span>
+                                <span class="metric-value" id="bt-win-rate">-</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">交易次數</span>
+                                <span class="metric-value" id="bt-trade-count">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 權益曲線 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">📈 權益曲線</h4>
+                        <div class="equity-curve-container">
+                            <canvas id="bt-equity-chart"></canvas>
+                            <div class="equity-placeholder" id="bt-equity-placeholder">
+                                執行回測後顯示權益曲線
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 最新持有資訊 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">💼 最新持有（買進參考）</h4>
+                        <div class="backtest-holdings" id="bt-holdings">
+                            <div class="holdings-empty">執行回測後顯示持有資訊</div>
+                        </div>
+                    </div>
+
+                    <!-- 交易記錄 -->
+                    <div class="backtest-section">
+                        <h4 class="backtest-section-title">📝 交易記錄</h4>
+                        <div class="backtest-trade-log" id="bt-trade-log">
+                            <div class="trade-log-empty">執行回測後顯示交易記錄</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 資本輪動：僅 K 線圖 -->
+        <div class="chart-container chart-container-full hidden" id="rotation-charts">
             <div id="chart-gold" class="chart"></div>
             <div id="chart-btc" class="chart"></div>
             <div id="chart-bonds" class="chart"></div>
-        </div>
-
-        <!-- 時間範圍選擇 -->
-        <div class="period-selector">
-            <button class="period-btn" data-period="3mo">3個月</button>
-            <button class="period-btn" data-period="6mo">6個月</button>
-            <button class="period-btn active" data-period="1y">1年</button>
-            <button class="period-btn" data-period="2y">2年</button>
-            <button class="period-btn" data-period="5y">5年</button>
         </div>
 
         <!-- 載入狀態 -->
@@ -92,6 +405,7 @@
         </div>
     </div>
 
-    <script src="/static/js/chart.js"></script>
+    <!-- 使用 ES Modules 載入模組化 JS -->
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
