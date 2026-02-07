@@ -258,204 +258,231 @@ index.html - FinPack 主頁面
                         </div>
                     </div>
 
-                    <!-- 3. 買入條件 -->
+                    <!-- 3. 條件設定 (Tab 介面) -->
                     <div class="backtest-section">
-                        <h4 class="backtest-section-title">📈 買入條件</h4>
+                        <h4 class="backtest-section-title">⚙️ 條件設定</h4>
                         
-                        <!-- 市場選擇 -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">市場選擇</h5>
-                            <div class="backtest-checkboxes horizontal">
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-market" value="global" checked>
-                                    <span>🌍 國際</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-market" value="us">
-                                    <span>🇺🇸 美股</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-market" value="tw">
-                                    <span>🇹🇼 台股</span>
-                                </label>
-                            </div>
+                        <!-- Tab 導航 -->
+                        <div class="bt-tabs">
+                            <button class="bt-tab active" data-tab="buy">📈 買入條件</button>
+                            <button class="bt-tab" data-tab="sell">📉 賣出條件</button>
+                            <button class="bt-tab" data-tab="rebalance">🔄 再平衡</button>
                         </div>
                         
-                        <!-- 買入範圍 (Universe Filter, 複選) -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">買入範圍 <small>(複選，定義候選股票池)</small></h5>
-                            <div class="backtest-buy-rules">
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-filter-a" value="sharpe_rank" checked>
-                                    <span>Sharpe Top-</span>
-                                    <input type="number" id="bt-sharpe-top-n" value="15" min="5" max="50" class="inline-input">
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-filter-a" value="sharpe_threshold">
-                                    <span>Sharpe ≥</span>
-                                    <input type="number" id="bt-sharpe-threshold" value="1" min="0" max="3" step="0.1" class="inline-input">
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-filter-a" value="sharpe_streak">
-                                    <span>連續</span>
-                                    <input type="number" id="bt-sharpe-consecutive-days" value="3" min="1" max="10" class="inline-input">
-                                    <span>天在 Top-15</span>
-                                </label>
+                        <!-- Tab 內容區 -->
+                        <div class="bt-tab-content">
+                            <!-- 買入條件 Tab -->
+                            <div class="bt-tab-pane active" id="bt-tab-buy">
+                                <!-- 市場選擇 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">市場選擇</h5>
+                                    <div class="backtest-checkboxes horizontal">
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-market" value="global" checked>
+                                            <span>🌍 國際</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-market" value="us">
+                                            <span>🇺🇸 美股</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-market" value="tw">
+                                            <span>🇹🇼 台股</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- 買入範圍 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">買入範圍 <small>(複選)</small></h5>
+                                    <div class="backtest-buy-rules">
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-filter-a" value="sharpe_rank" checked>
+                                            <span>Sharpe Top-</span>
+                                            <input type="number" id="bt-sharpe-top-n" value="15" min="5" max="50" class="inline-input">
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-filter-a" value="sharpe_threshold" checked>
+                                            <span>Sharpe ≥</span>
+                                            <input type="number" id="bt-sharpe-threshold" value="1" min="0" max="3" step="0.1" class="inline-input">
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-filter-a" value="sharpe_streak">
+                                            <span>連續</span>
+                                            <input type="number" id="bt-sharpe-consecutive-days" value="3" min="1" max="10" class="inline-input">
+                                            <span>天在 Top-15</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 成長動能 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">成長動能 <small>(可選)</small></h5>
+                                    <div class="backtest-buy-rules">
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-growth-rule" value="growth_rank">
+                                            <span>Growth Top-</span>
+                                            <input type="number" id="bt-growth-top-k" value="7" min="1" max="15" class="inline-input">
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-growth-rule" value="growth_streak" checked>
+                                            <span>Growth 連續</span>
+                                            <input type="number" id="bt-growth-consecutive-days" value="2" min="1" max="5" class="inline-input">
+                                            <span>天在前 50%</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 選股方式 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">選股方式 <small>(可選)</small></h5>
+                                    <div class="backtest-buy-rules">
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-pick-rule" value="sort_sharpe" checked>
+                                            <span>按 Sharpe 順序</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-pick-rule" value="sort_industry">
+                                            <span>按 產業+Sharpe 順序</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 買入參數 -->
+                                <div class="backtest-inline-fields">
+                                    <div class="backtest-field small">
+                                        <label>每次買入數量</label>
+                                        <input type="number" id="bt-top-n" value="5" min="1" max="15">
+                                    </div>
+                                    <div class="backtest-field small">
+                                        <label>每檔投入金額</label>
+                                        <input type="number" id="bt-amount-per-stock" value="100000" min="10000" step="10000">
+                                    </div>
+                                    <div class="backtest-field small">
+                                        <label>最大持倉數</label>
+                                        <input type="number" id="bt-max-positions" value="10" min="1" max="30">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 賣出條件 Tab -->
+                            <div class="bt-tab-pane" id="bt-tab-sell">
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">賣出觸發條件 <small>(可多選組合)</small></h5>
+                                    <div class="backtest-sell-rules">
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_sharpe_fail" checked>
+                                            <span>Sharpe 排名連續</span>
+                                            <input type="number" id="bt-sharpe-disqualify-periods" value="2" min="1" max="10" class="inline-input">
+                                            <span>期掉出 Top-</span>
+                                            <input type="number" id="bt-sharpe-disqualify-n" value="15" min="5" max="50" class="inline-input">
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_growth_fail">
+                                            <span>Growth 最近</span>
+                                            <input type="number" id="bt-growth-disqualify-days" value="5" min="3" max="20" class="inline-input">
+                                            <span>天均值 < 0</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_not_selected">
+                                            <span>連續</span>
+                                            <input type="number" id="bt-buy-not-selected-periods" value="3" min="1" max="10" class="inline-input">
+                                            <span>期未入選買入候選</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_drawdown" checked>
+                                            <span>價格回撤超過</span>
+                                            <input type="number" id="bt-price-breakdown-pct" value="40" min="20" max="60" class="inline-input">
+                                            <span>%</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_weakness">
+                                            <span>Sharpe 與 Growth 排名皆 ></span>
+                                            <input type="number" id="bt-relative-weakness-k" value="20" min="10" max="50" class="inline-input">
+                                            <span>連續</span>
+                                            <input type="number" id="bt-relative-weakness-periods" value="3" min="1" max="10" class="inline-input">
+                                            <span>期</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 再平衡 Tab -->
+                            <div class="bt-tab-pane" id="bt-tab-rebalance">
+                                <!-- 再平衡頻率 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">再平衡頻率</h5>
+                                    <div class="backtest-checkboxes horizontal">
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-rebalance-freq" value="daily">
+                                            <span>每日</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-rebalance-freq" value="weekly" checked>
+                                            <span>每週</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-rebalance-freq" value="monthly">
+                                            <span>每月</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- 投入方式 -->
+                                <div class="backtest-subsection">
+                                    <h5 class="backtest-subsection-title">投入方式 <small>(單選)</small></h5>
+                                    <div class="backtest-buy-rules">
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-invest-rule" value="rebal_immediate">
+                                            <span>符合條件即全額投入</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-invest-rule" value="rebal_batch">
+                                            <span>每次投入</span>
+                                            <input type="number" id="bt-batch-ratio" value="20" min="10" max="100" step="10" class="inline-input">
+                                            <span>% 可用資金</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-invest-rule" value="rebal_delayed" checked>
+                                            <span>等市場轉強再進場 (Sharpe Top5 均值 > 0)</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-invest-rule" value="rebal_concentrated">
+                                            <span>只在排名前</span>
+                                            <input type="number" id="bt-concentrate-top-k" value="3" min="1" max="10" class="inline-input">
+                                            <span>有明確領先時投入</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-invest-rule" value="rebal_none">
+                                            <span>永不投入（僅觀察模式）</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
-                        <!-- 成長動能 (Growth Ranking, 可選單選) -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">成長動能 <small>(可選，篩選進場時機)</small></h5>
-                            <div class="backtest-buy-rules">
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-growth-rule" value="growth_rank">
-                                    <span>Growth Top-</span>
-                                    <input type="number" id="bt-growth-top-k" value="7" min="1" max="15" class="inline-input">
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-growth-rule" value="growth_streak" checked>
-                                    <span>Growth 連續</span>
-                                    <input type="number" id="bt-growth-consecutive-days" value="2" min="1" max="5" class="inline-input">
-                                    <span>天在前 50%</span>
-                                </label>
+                        
+                        <!-- 綜合風險評估 -->
+                        <div class="bt-risk-summary" id="bt-risk-summary">
+                            <div class="risk-header">
+                                <span class="risk-title">📊 綜合風險評估</span>
+                                <span class="risk-level low" id="bt-risk-level">🟢 低風險</span>
                             </div>
-                        </div>
-
-                        <!-- 選股方式 (Pick Rule, 可選單選) -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">選股方式 <small>(可選，決定買入順序)</small></h5>
-                            <div class="backtest-buy-rules">
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-pick-rule" value="sort_sharpe">
-                                    <span>按 Sharpe 順序</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="checkbox" name="bt-pick-rule" value="sort_industry" checked>
-                                    <span>按 產業+Sharpe 順序</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- 買入參數 -->
-                        <div class="backtest-inline-fields">
-                            <div class="backtest-field small">
-                                <label>每次買入數量</label>
-                                <input type="number" id="bt-top-n" value="5" min="1" max="15">
-                            </div>
-                            <div class="backtest-field small">
-                                <label>每檔投入金額</label>
-                                <input type="number" id="bt-amount-per-stock" value="100000" min="10000" step="10000">
-                            </div>
-                            <div class="backtest-field small">
-                                <label>最大持倉數</label>
-                                <input type="number" id="bt-max-positions" value="10" min="1" max="30">
-                            </div>
-                        </div>
-
-                        <!-- 風險提示 -->
-                        <div class="backtest-risk-info" id="bt-risk-info">
-                            <div class="risk-indicator" id="bt-risk-indicator">
-                                <span class="risk-label">當前風險：</span>
-                                <span class="risk-level balanced" id="bt-risk-level">⚖️ 平衡</span>
+                            <div class="risk-breakdown">
+                                <div class="risk-item">
+                                    <span class="risk-item-label">買入</span>
+                                    <span class="risk-item-value low" id="bt-buy-risk">🟢</span>
+                                </div>
+                                <div class="risk-item">
+                                    <span class="risk-item-label">賣出</span>
+                                    <span class="risk-item-value low" id="bt-sell-risk">🟢</span>
+                                </div>
+                                <div class="risk-item">
+                                    <span class="risk-item-label">再平衡</span>
+                                    <span class="risk-item-value low" id="bt-rebal-risk">🟢</span>
+                                </div>
                             </div>
                             <div class="risk-description" id="bt-risk-description">
-                                預設策略：Sharpe Top + Growth 連續 + 產業分散 → 牛市能抓長線強者，熊市自動保護
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 4. 賣出條件 -->
-                    <div class="backtest-section">
-                        <h4 class="backtest-section-title">📉 賣出條件 <small>(可多選組合)</small></h4>
-                        <div class="backtest-sell-rules">
-                            <label class="backtest-checkbox">
-                                <input type="checkbox" name="bt-sell-rule" value="sell_sharpe_fail" checked>
-                                <span>Sharpe 排名連續</span>
-                                <input type="number" id="bt-sharpe-disqualify-periods" value="3" min="1" max="10" class="inline-input">
-                                <span>期掌出 Top-</span>
-                                <input type="number" id="bt-sharpe-disqualify-n" value="15" min="5" max="50" class="inline-input">
-                            </label>
-                            <label class="backtest-checkbox">
-                                <input type="checkbox" name="bt-sell-rule" value="sell_growth_fail">
-                                <span>Growth 最近</span>
-                                <input type="number" id="bt-growth-disqualify-days" value="5" min="3" max="20" class="inline-input">
-                                <span>天均值 < 0</span>
-                            </label>
-                            <label class="backtest-checkbox">
-                                <input type="checkbox" name="bt-sell-rule" value="sell_not_selected">
-                                <span>連續</span>
-                                <input type="number" id="bt-buy-not-selected-periods" value="3" min="1" max="10" class="inline-input">
-                                <span>期未入選買入候選</span>
-                            </label>
-                            <label class="backtest-checkbox">
-                                <input type="checkbox" name="bt-sell-rule" value="sell_drawdown" checked>
-                                <span>價格回撤超過</span>
-                                <input type="number" id="bt-price-breakdown-pct" value="40" min="20" max="60" class="inline-input">
-                                <span>%</span>
-                            </label>
-                            <label class="backtest-checkbox">
-                                <input type="checkbox" name="bt-sell-rule" value="sell_weakness">
-                                <span>Sharpe 與 Growth 排名皆 ></span>
-                                <input type="number" id="bt-relative-weakness-k" value="20" min="10" max="50" class="inline-input">
-                                <span>連續</span>
-                                <input type="number" id="bt-relative-weakness-periods" value="3" min="1" max="10" class="inline-input">
-                                <span>期</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- 5. 再平衡條件 -->
-                    <div class="backtest-section">
-                        <h4 class="backtest-section-title">🔄 再平衡條件</h4>
-                        
-                        <!-- 再平衡頻率 -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">再平衡頻率</h5>
-                            <div class="backtest-checkboxes horizontal">
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-rebalance-freq" value="daily">
-                                    <span>每日</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-rebalance-freq" value="weekly" checked>
-                                    <span>每週</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-rebalance-freq" value="monthly">
-                                    <span>每月</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- 投入方式 (R 類，單選) -->
-                        <div class="backtest-subsection">
-                            <h5 class="backtest-subsection-title">投入方式 <small>(單選，決定如何投入資金)</small></h5>
-                            <div class="backtest-buy-rules">
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-invest-rule" value="rebal_immediate">
-                                    <span>符合條件即全額投入</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-invest-rule" value="rebal_batch" checked>
-                                    <span>每次投入</span>
-                                    <input type="number" id="bt-batch-ratio" value="20" min="10" max="100" step="10" class="inline-input">
-                                    <span>% 可用資金</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-invest-rule" value="rebal_delayed">
-                                    <span>等市場轉強再進場 (Sharpe Top5 均值 > 0)</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-invest-rule" value="rebal_concentrated">
-                                    <span>只在排名前</span>
-                                    <input type="number" id="bt-concentrate-top-k" value="3" min="1" max="10" class="inline-input">
-                                    <span>有明確領先時投入</span>
-                                </label>
-                                <label class="backtest-checkbox">
-                                    <input type="radio" name="bt-invest-rule" value="rebal_none">
-                                    <span>永不投入（僅觀察模式）</span>
-                                </label>
+                                防禦型配置：熊市自動減少曝險，牛市報酬相對受限
                             </div>
                         </div>
                     </div>
@@ -513,7 +540,7 @@ index.html - FinPack 主頁面
 
                     <!-- 最新持有資訊 -->
                     <div class="backtest-section">
-                        <h4 class="backtest-section-title">💼 最新持有（買進參考）</h4>
+                        <h4 class="backtest-section-title">💼 最新持有</h4>
                         <div class="backtest-holdings" id="bt-holdings">
                             <div class="holdings-empty">執行回測後顯示持有資訊</div>
                         </div>

@@ -789,6 +789,143 @@ body {
     color: var(--text-muted);
 }
 
+/* ===== Backtest Tab 介面 (Gradio 風格) ===== */
+.bt-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 16px;
+    gap: 4px;
+}
+
+.bt-tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.bt-tab:hover {
+    background: var(--bg-highlight);
+    color: var(--text-primary);
+}
+
+.bt-tab.active {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+.bt-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary-color);
+}
+
+.bt-tab-content {
+    position: relative;
+}
+
+.bt-tab-pane {
+    display: none;
+    animation: fadeIn 0.2s ease;
+}
+
+.bt-tab-pane.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 綜合風險評估區塊 */
+.bt-risk-summary {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.bt-risk-summary .risk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.bt-risk-summary .risk-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.bt-risk-summary .risk-level {
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+}
+
+.bt-risk-summary .risk-level.low {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.bt-risk-summary .risk-level.balanced {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+}
+
+.bt-risk-summary .risk-level.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.bt-risk-summary .risk-breakdown {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.bt-risk-summary .risk-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-highlight);
+    border-radius: var(--radius-sm);
+}
+
+.bt-risk-summary .risk-item-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.bt-risk-summary .risk-item-value {
+    font-size: 14px;
+}
+
+.bt-risk-summary .risk-item-value.low { color: #22c55e; }
+.bt-risk-summary .risk-item-value.balanced { color: #eab308; }
+.bt-risk-summary .risk-item-value.high { color: #ef4444; }
+
+.bt-risk-summary .risk-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
 .backtest-metrics {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

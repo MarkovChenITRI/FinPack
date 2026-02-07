@@ -109,59 +109,124 @@ export class BacktestEngine {
             });
         });
         
+        // 賣出條件變更時更新風險評估
+        const sellRuleInputs = document.querySelectorAll('input[name="bt-sell-rule"]');
+        sellRuleInputs.forEach(input => {
+            input.addEventListener('change', () => this.updateRiskIndicator());
+        });
+        
+        // 再平衡條件變更時更新風險評估
+        const investRuleInputs = document.querySelectorAll('input[name="bt-invest-rule"]');
+        investRuleInputs.forEach(input => {
+            input.addEventListener('change', () => this.updateRiskIndicator());
+        });
+        
         // 初始化風險提示
         this.updateRiskIndicator();
     }
     
     /**
-     * 更新風險提示
+     * 更新綜合風險評估
      */
     updateRiskIndicator() {
-        const filterA = Array.from(document.querySelectorAll('input[name="bt-filter-a"]:checked')).map(el => el.value);
+        // 計算買入風險
+        const buyRisk = this.assessBuyRisk();
+        // 計算賣出風險
+        const sellRisk = this.assessSellRisk();
+        // 計算再平衡風險
+        const rebalRisk = this.assessRebalanceRisk();
+        
+        // 計算綜合分數 (低=1, 平衡=2, 高=3)
+        const riskScores = { low: 1, balanced: 2, high: 3 };
+        const totalScore = riskScores[buyRisk] + riskScores[sellRisk] + riskScores[rebalRisk];
+        
+        // 決定綜合評級
+        let overallRisk, description;
+        if (totalScore <= 4) {
+            overallRisk = 'low';
+            description = '防禦型配置：熊市自動減少曝險，牛市報酬相對受限';
+        } else if (totalScore <= 6) {
+            overallRisk = 'balanced';
+            description = '全天候配置：牛市能抓強者，熊市有適度保護';
+        } else {
+            overallRisk = 'high';
+            description = '進取型配置：牛市報酬最大化，熊市需注意風險控制';
+        }
+        
+        // 更新 UI
+        const riskLevel = document.getElementById('bt-risk-level');
+        const riskDescription = document.getElementById('bt-risk-description');
+        const buyRiskEl = document.getElementById('bt-buy-risk');
+        const sellRiskEl = document.getElementById('bt-sell-risk');
+        const rebalRiskEl = document.getElementById('bt-rebal-risk');
+        
+        if (riskLevel) {
+            riskLevel.className = `risk-level ${overallRisk}`;
+            riskLevel.textContent = overallRisk === 'high' ? '🔴 高風險' : 
+                                   (overallRisk === 'low' ? '🟢 低風險' : '⚖️ 平衡');
+        }
+        if (riskDescription) {
+            riskDescription.textContent = description;
+        }
+        
+        // 更新三維度風險指示
+        const riskEmoji = { low: '🟢', balanced: '⚖️', high: '🔴' };
+        if (buyRiskEl) {
+            buyRiskEl.className = `risk-item-value ${buyRisk}`;
+            buyRiskEl.textContent = riskEmoji[buyRisk];
+        }
+        if (sellRiskEl) {
+            sellRiskEl.className = `risk-item-value ${sellRisk}`;
+            sellRiskEl.textContent = riskEmoji[sellRisk];
+        }
+        if (rebalRiskEl) {
+            rebalRiskEl.className = `risk-item-value ${rebalRisk}`;
+            rebalRiskEl.textContent = riskEmoji[rebalRisk];
+        }
+    }
+    
+    /**
+     * 評估買入條件風險
+     */
+    assessBuyRisk() {
+        const filters = Array.from(document.querySelectorAll('input[name="bt-filter-a"]:checked')).map(el => el.value);
         const growthRule = document.querySelector('input[name="bt-growth-rule"]:checked')?.value || null;
         const pickRule = document.querySelector('input[name="bt-pick-rule"]:checked')?.value || null;
         
-        const riskLevel = document.getElementById('bt-risk-level');
-        const riskDescription = document.getElementById('bt-risk-description');
+        // 檢查是否有強過濾
+        const hasStrongFilter = filters.includes('sharpe_threshold') || filters.includes('sharpe_streak');
+        // 檢查是否追漲集中
+        const isAggressive = growthRule === 'growth_rank' && pickRule === 'sort_sharpe';
         
-        if (!riskLevel || !riskDescription) return;
+        if (hasStrongFilter) return 'low';
+        if (isAggressive) return 'high';
+        return 'balanced';
+    }
+    
+    /**
+     * 評估賣出條件風險
+     */
+    assessSellRisk() {
+        const sellRules = Array.from(document.querySelectorAll('input[name="bt-sell-rule"]:checked')).map(el => el.value);
         
-        let risk = 'balanced';
-        let description = '';
+        if (sellRules.length === 0) return 'high';
+        if (sellRules.length === 1) return 'balanced';
+        return 'low';  // 2 個以上賣出條件
+    }
+    
+    /**
+     * 評估再平衡條件風險
+     */
+    assessRebalanceRisk() {
+        const investRule = document.querySelector('input[name="bt-invest-rule"]:checked')?.value || 'rebal_batch';
         
-        // 檢查是否有強過濾條件
-        const hasStrongFilter = filterA.includes('sharpe_threshold') || filterA.includes('sharpe_streak');
-        const useGrowthTop = growthRule === 'growth_rank';
-        const useGrowthStreak = growthRule === 'growth_streak';
-        const useIndustryDiversify = pickRule === 'sort_industry';
-        const useSharpeOnly = pickRule === 'sort_sharpe';
-        
-        if (filterA.length === 0) {
-            risk = 'high';
-            description = '⚠️ 請至少選擇一個買入範圍條件（A 類）';
-        } else if (hasStrongFilter && useGrowthStreak && useIndustryDiversify) {
-            risk = 'low';
-            description = '🛡️ 熊市最安全組合：強過濾 + 連續動能驗證 + 產業分散';
-        } else if (!hasStrongFilter && useGrowthTop && useSharpeOnly) {
-            risk = 'high';
-            description = '⚠️ 牛市最佳但熊市高風險：growth_rank 在熊市會追反彈';
-        } else if (hasStrongFilter) {
-            risk = 'low';
-            description = '🛡️ 保守策略：強過濾條件在熊市會自動停買';
-        } else if (useGrowthStreak) {
-            risk = 'balanced';
-            description = '⚖️ 穩健策略：連續動能驗證過濾假突破';
-        } else if (useIndustryDiversify) {
-            risk = 'balanced';
-            description = '⚖️ 分散策略：產業分散降低單一產業崩盤風險';
-        } else {
-            risk = 'balanced';
-            description = '⚖️ 中性策略：建議根據市場狀況調整條件組合';
+        if (investRule === 'rebal_immediate' || investRule === 'rebal_concentrated') {
+            return 'high';
         }
-        
-        riskLevel.className = `risk-level ${risk}`;
-        riskLevel.textContent = risk === 'high' ? '🔴 高風險' : (risk === 'low' ? '🟢 低風險' : '⚖️ 平衡');
-        riskDescription.textContent = description;
+        if (investRule === 'rebal_delayed' || investRule === 'rebal_none') {
+            return 'low';
+        }
+        return 'balanced';  // rebal_batch
     }
     
     /**

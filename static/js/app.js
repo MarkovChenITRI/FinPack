@@ -175,6 +175,14 @@ class FinPackApp {
                 await this.switchPeriod(period);
             });
         });
+        
+        // 回測條件 Tab 切換
+        document.querySelectorAll('.bt-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tabId = e.target.dataset.tab;
+                this.switchBacktestTab(tabId);
+            });
+        });
 
         // 監聽 K 線日期變更事件
         window.addEventListener('kline-date-change', (e) => {
@@ -228,6 +236,22 @@ class FinPackApp {
             return this.charts[market].lockedDate;
         }
         return null;
+    }
+    
+    /**
+     * 切換回測條件 Tab
+     * @param {string} tabId - tab ID (buy/sell/rebalance)
+     */
+    switchBacktestTab(tabId) {
+        // 切換 Tab 按鈕狀態
+        document.querySelectorAll('.bt-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+        
+        // 切換 Tab 內容顯示
+        document.querySelectorAll('.bt-tab-pane').forEach(pane => {
+            pane.classList.toggle('active', pane.id === `bt-tab-${tabId}`);
+        });
     }
 
     switchMarket(market) {
