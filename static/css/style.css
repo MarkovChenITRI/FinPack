@@ -563,6 +563,13 @@ body {
     gap: 8px;
 }
 
+/* 水平排列（用於市場選擇等） */
+.backtest-checkboxes.horizontal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
 .backtest-checkbox {
     display: flex;
     align-items: center;
@@ -593,6 +600,105 @@ body {
     font-size: 12px;
     text-align: center;
     margin: 0 4px;
+}
+
+/* 買入條件子區塊 */
+.backtest-subsection {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.backtest-subsection:last-of-type {
+    margin-bottom: 0;
+}
+
+.backtest-subsection-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin: 0 0 10px 0;
+}
+
+.backtest-subsection-title small {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+/* 風險標籤 */
+.risk-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    font-weight: 500;
+}
+
+.risk-tag.high {
+    background: rgba(248, 81, 73, 0.2);
+    color: var(--accent-red);
+}
+
+.risk-tag.low {
+    background: rgba(63, 185, 80, 0.2);
+    color: var(--accent-green);
+}
+
+.risk-tag.balanced {
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--accent-blue);
+}
+
+/* 風險提示區塊 */
+.backtest-risk-info {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-top: 12px;
+}
+
+.risk-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.risk-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.risk-level {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.risk-level.high {
+    background: rgba(248, 81, 73, 0.2);
+    color: var(--accent-red);
+}
+
+.risk-level.low {
+    background: rgba(63, 185, 80, 0.2);
+    color: var(--accent-green);
+}
+
+.risk-level.balanced {
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--accent-blue);
+}
+
+.risk-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
 }
 
 .backtest-actions {
@@ -639,6 +745,48 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+/* 日期調整通知 */
+.bt-date-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bt-date-notice .notice-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.bt-date-notice .notice-content {
+    flex: 1;
+    line-height: 1.5;
+}
+
+.bt-date-notice .notice-content strong {
+    color: var(--text-primary);
+}
+
+.bt-date-notice .old-date {
+    color: #f85149;
+    text-decoration: line-through;
+}
+
+.bt-date-notice .new-date {
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.bt-date-notice small {
+    color: var(--text-muted);
 }
 
 .backtest-metrics {
