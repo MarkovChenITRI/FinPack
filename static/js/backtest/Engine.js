@@ -306,6 +306,9 @@ export class BacktestEngine {
         // 取得所有可投資股票
         let candidates = Object.keys(context.stockInfo);
         
+        // 排除 Market Index（指數不可交易）
+        candidates = candidates.filter(t => context.stockInfo[t]?.industry !== 'Market Index');
+        
         // 根據市場過濾
         if (this.options.market === 'us') {
             candidates = candidates.filter(t => context.stockInfo[t]?.country === 'US');
