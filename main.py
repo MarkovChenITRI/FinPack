@@ -4,6 +4,7 @@ FinPack API Server - 入口點
 啟動 Flask 應用程式，載入所有資料模組並註冊 API 路由
 """
 import os
+import sys
 from flask import Flask, send_from_directory, jsonify
 
 # 載入資料容器與路由
@@ -11,13 +12,28 @@ from src import get_container
 from routes import register_blueprints
 
 
+def get_resource_path(relative_path):
+    """取得資源路徑（支援 PyInstaller 打包）"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包後的路徑
+        base_path = sys._MEIPASS
+    else:
+        # 開發模式的路徑
+        base_path = os.path.abspath('.')
+    return os.path.join(base_path, relative_path)
+
+
 def create_app():
     """工廠函數：建立 Flask 應用程式"""
     
+    # 取得靜態檔案和模板路徑
+    static_path = get_resource_path('static')
+    template_path = get_resource_path('templates')
+    
     # 初始化 Flask
     app = Flask(__name__, 
-                static_folder='static',
-                template_folder='templates')
+                static_folder=static_path,
+                template_folder=template_path)
     
     print("=" * 50)
     print("🚀 FinPack API Server v2.0")
@@ -71,14 +87,18 @@ if __name__ == '__main__':
     # 開發模式設定
     debug_mode = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
     port = int(os.environ.get('PORT', 5000))
+    # 設為 False 可避免 debug 模式下重複初始化
+    use_reloader = os.environ.get('FLASK_RELOADER', 'False').lower() == 'true'
     
     print(f"\n🌐 啟動伺服器: http://localhost:{port}")
     print(f"📝 Debug 模式: {debug_mode}")
+    print(f"🔄 自動重載: {use_reloader}")
     print("-" * 50)
     
     app.run(
         host='0.0.0.0',
         port=port,
         debug=debug_mode,
+        use_reloader=use_reloader,
         threaded=True
     )

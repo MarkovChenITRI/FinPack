@@ -56,7 +56,7 @@ src/
 | `RISK_FREE_RATE` | `float` | 年化無風險利率（預設 0.04） |
 | `SLOPE_WINDOW` | `int` | 排名變化統計窗口 |
 | `TRADINGVIEW_LIST_ID` | `str` | TradingView 觀察清單 ID |
-| `MARKET_INDICES` | `List[str]` | 追蹤的市場指數代碼 |
+| `NON_TRADABLE_INDUSTRIES` | `Set[str]` | 不可交易的 industry 類型（由 TradingView 分類決定） |
 
 ---
 
@@ -172,7 +172,6 @@ container = refresh_container()  # 強制重載
 | `sharpe_matrix` | `DataFrame` | `calculate_all_indicators()` |
 | `ranking_matrix` | `DataFrame` | `calculate_all_indicators()` |
 | `growth_matrix` | `DataFrame` | `calculate_all_indicators()` |
-| `slope_matrix` | `property` | **已棄用別名** → `growth_matrix` |
 
 ### 6.3 方法 API
 
