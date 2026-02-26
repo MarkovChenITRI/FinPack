@@ -1,20 +1,17 @@
 # FinPack 專案配置
-# 詳細架構說明見 README.md
+# 套件安裝使用 pip: pip install -r requirements.txt
+# PyInstaller 打包使用 build.ps1 或 build.bat
 
 [project]
 name = "finpack"
-version = "0.1.0"
-description = "全球市場看盤與回測系統 - Sharpe Ratio 分析、交易模擬、回測引擎"
-readme = "README.md"
-requires-python = ">=3.12"
+version = "2.0.0"
+description = "全球市場看盤與回測系統 - Sharpe Ratio 分析、後端回測引擎"
+requires-python = ">=3.11"
 dependencies = [
-    "flask>=3.1.2",
-    "matplotlib>=3.10.8",
-    "numpy>=2.4.2",
-    "pandas>=3.0.0",
-    "requests>=2.32.5",
-    "scikit-learn>=1.8.0",
-    "scipy>=1.17.0",
-    "tqdm>=4.67.3",
-    "yfinance>=1.1.0",
+    "flask>=2.3.0",
+    "numpy>=1.24.0",
+    "pandas==2.2.3",
+    "requests>=2.28.0",
+    "scipy>=1.10.0",
+    "yfinance>=0.2.28",
 ]

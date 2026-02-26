@@ -1,16 +1,21 @@
 # FinPack 相依套件
-# 架構說明見 README.md
+# 安裝: pip install -r requirements.txt
 #
-# 核心套件：
-#   flask     Web 服務器
-#   yfinance  股票數據下載
-#   pandas    數據處理 (DataFrame, 矩陣運算)
-#   numpy     數學運算
+# ==============================
+# [共用] core/ 核心模組 (main.py + run.py)
+# ==============================
+yfinance>=0.2.28       # 股票數據下載
+pandas==2.2.3          # 數據處理 (DataFrame, 矩陣運算) - 鎖定版本以確保 pickle 相容
+numpy>=1.24.0          # 數學運算
+scipy>=1.10.0          # 統計計算
 
-flask>=2.3.0
-yfinance>=0.2.28
-pandas>=2.0.0
-numpy>=1.24.0
-scipy>=1.10.0
-scikit-learn>=1.2.0
-requests>=2.28.0
+# ==============================
+# [共用] backtest/ 回測模組 (main.py 前端回測 + run.py CLI)
+# ==============================
+# 無額外套件，使用 core/ 的 pandas、numpy
+
+# ==============================
+# [main.py 專用] web/ Flask 服務器
+# ==============================
+flask>=2.3.0           # Web 框架
+requests>=2.28.0       # HTTP 請求（TradingView API）

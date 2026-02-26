@@ -270,11 +270,11 @@ index.html - FinPack 主頁面
                                     <h5 class="backtest-subsection-title">市場選擇</h5>
                                     <div class="backtest-checkboxes horizontal">
                                         <label class="backtest-checkbox">
-                                            <input type="radio" name="bt-market" value="global" checked>
+                                            <input type="radio" name="bt-market" value="global">
                                             <span>🌍 國際</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="radio" name="bt-market" value="us">
+                                            <input type="radio" name="bt-market" value="us" checked>
                                             <span>🇺🇸 美股</span>
                                         </label>
                                         <label class="backtest-checkbox">
@@ -342,10 +342,6 @@ index.html - FinPack 主頁面
 
                                 <!-- 買入參數 -->
                                 <div class="backtest-inline-fields">
-                                    <div class="backtest-field small">
-                                        <label>每次買入數量</label>
-                                        <input type="number" id="bt-top-n" value="5" min="1" max="15">
-                                    </div>
                                     <div class="backtest-field small">
                                         <label>每檔投入金額</label>
                                         <input type="number" id="bt-amount-per-stock" value="100000" min="10000" step="10000">

@@ -3,18 +3,15 @@
  * 
  * 職責：
  *   - collectSettings()    收集使用者設定
- *   - runBacktest()        執行前端回測計算
+ *   - runBacktest()        呼叫後端 API 執行回測
  *   - displayResults()     渲染回測結果
  * 
- * 核心計算由前端執行：
- *   - 使用 backtest/Engine.js 進行計算
+ * 核心計算由後端執行：
+ *   - POST /api/backtest/run
  * 
  * 數據來源：
- *   - 產業排名資料：GET /api/industry/data
- *   - 價格資料：GET /api/backtest/prices
+ *   - 回測結果：POST /api/backtest/run
  */
-
-import { BacktestEngine as Engine } from '../backtest/Engine.js';
 
 export class BacktestEngine {
     constructor() {
@@ -24,8 +21,7 @@ export class BacktestEngine {
             start_date: null,
             end_date: null,
             rebalance_freq: 'weekly',
-            market: 'global',
-            top_n: 5,
+            market: 'us',
             amount_per_stock: 100000,
             max_positions: 10,
             buy_conditions: [],    // 語意化鍵值: sharpe_rank, growth_streak, etc.
@@ -57,11 +53,11 @@ export class BacktestEngine {
         const today = new Date();
         const endDate = today.toISOString().split('T')[0];
         
-        const startDate = new Date(today);
-        startDate.setMonth(startDate.getMonth() - 6);
+        // 預設起始日期: 2025-09-08
+        const defaultStartDate = '2025-09-08';
         
         if (endDateInput) endDateInput.value = endDate;
-        if (startDateInput) startDateInput.value = startDate.toISOString().split('T')[0];
+        if (startDateInput) startDateInput.value = defaultStartDate;
     }
     
     bindEvents() {
@@ -238,8 +234,7 @@ export class BacktestEngine {
         this.settings.start_date = document.getElementById('bt-start-date')?.value;
         this.settings.end_date = document.getElementById('bt-end-date')?.value;
         this.settings.rebalance_freq = document.querySelector('input[name="bt-rebalance-freq"]:checked')?.value || 'weekly';
-        this.settings.market = document.querySelector('input[name="bt-market"]:checked')?.value || 'global';
-        this.settings.top_n = parseInt(document.getElementById('bt-top-n')?.value) || 5;
+        this.settings.market = document.querySelector('input[name="bt-market"]:checked')?.value || 'us';
         this.settings.amount_per_stock = parseFloat(document.getElementById('bt-amount-per-stock')?.value) || 100000;
         this.settings.max_positions = parseInt(document.getElementById('bt-max-positions')?.value) || 10;
         
@@ -281,7 +276,7 @@ export class BacktestEngine {
             }
         }
         
-        // C 類：選股方式（單選）
+        // C 類：選股方式（單選）- 只做排序，買入數量由 Engine 的 maxPositions 和資金決定
         const pickRule = document.querySelector('input[name="bt-pick-rule"]:checked');
         if (pickRule) {
             buyConditions.push(pickRule.value);  // sort_sharpe, sort_industry
@@ -331,115 +326,6 @@ export class BacktestEngine {
     }
     
     /**
-     * 計算 benchmark 權益曲線
-     * @param {Object} prices - 價格數據 {ticker: {date: price}}
-     * @param {string[]} dates - 日期陣列
-     * @param {number} initialCapital - 初始資金
-     * @returns {Object} {curve: [], marketName: string}
-     */
-    calculateBenchmarkCurve(prices, dates, initialCapital) {
-        // 根據選擇的市場決定使用哪個指數
-        let indexTicker = '^IXIC';  // 預設 NASDAQ
-        let marketName = '國際加權指數';
-        
-        switch (this.settings.market) {
-            case 'us':
-                indexTicker = '^IXIC';
-                marketName = 'NASDAQ';
-                break;
-            case 'tw':
-                indexTicker = '^TWII';
-                marketName = '台灣加權指數';
-                break;
-            case 'global':
-            default:
-                indexTicker = '^IXIC';
-                marketName = '國際加權指數';
-                break;
-        }
-        
-        // 取得指數價格
-        const indexPrices = prices[indexTicker];
-        
-        if (!indexPrices) {
-            console.warn(`⚠️ 無法取得 ${indexTicker} 資料，使用空 benchmark`);
-            return { curve: [], marketName };
-        }
-        
-        console.log(`📊 使用 ${indexTicker} (${marketName}) 作為 benchmark`);
-        
-        // 計算 benchmark 的權益曲線（假設以初始資金全部投入）
-        const benchmarkCurve = [];
-        let firstPrice = null;
-        
-        for (const date of dates) {
-            const price = indexPrices[date];
-            if (price) {
-                if (firstPrice === null) {
-                    firstPrice = price;
-                }
-                // 根據價格變化計算權益
-                const equity = initialCapital * (price / firstPrice);
-                benchmarkCurve.push({ date, equity });
-            }
-        }
-        
-        return { curve: benchmarkCurve, marketName };
-    }
-    
-    /**
-     * 計算夏普比率
-     * @param {Array} equityCurve - 權益曲線 [{date, equity}]
-     * @param {number} riskFreeRate - 無風險利率（年化，預設 0）
-     * @returns {number}
-     */
-    calculateSharpeRatio(equityCurve, riskFreeRate = 0) {
-        if (equityCurve.length < 2) return 0;
-        
-        // 計算日報酬率
-        const dailyReturns = [];
-        for (let i = 1; i < equityCurve.length; i++) {
-            const ret = (equityCurve[i].equity - equityCurve[i - 1].equity) / equityCurve[i - 1].equity;
-            dailyReturns.push(ret);
-        }
-        
-        if (dailyReturns.length === 0) return 0;
-        
-        // 平均日報酬
-        const avgReturn = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
-        
-        // 標準差
-        const stdDev = Math.sqrt(
-            dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / dailyReturns.length
-        );
-        
-        if (stdDev === 0) return 0;
-        
-        // 年化夏普比率
-        return (avgReturn / stdDev) * Math.sqrt(252);
-    }
-    
-    /**
-     * 計算最大回撤
-     * @param {Array} equityCurve - 權益曲線 [{date, equity}]
-     * @returns {number} 最大回撤百分比
-     */
-    calculateMaxDrawdown(equityCurve) {
-        if (equityCurve.length < 2) return 0;
-        
-        let peak = equityCurve[0].equity;
-        let maxDrawdown = 0;
-        
-        for (const point of equityCurve) {
-            peak = Math.max(peak, point.equity);
-            const drawdown = (peak - point.equity) / peak * 100;
-            maxDrawdown = Math.max(maxDrawdown, drawdown);
-        }
-        
-        return maxDrawdown;
-    }
-    
-    /**
      * 執行回測（調用後端 API）
      */
     async runBacktest() {
@@ -475,143 +361,152 @@ export class BacktestEngine {
                 return;
             }
             
-            console.log('📊 載入回測資料...', this.settings);
+            console.log('📊 準備呼叫後端回測 API...', this.settings);
             
-            // 統一使用 5y 數據，確保有足夠歷史數據供回測
-            const period = '5y';
-            
-            console.log(`📅 載入 ${period} 歷史數據...`);
-            
-            // 載入資料（兩個 API 都使用 5y）+ 匯率歷史
-            const [industryData, pricesData, exchangeRateData] = await Promise.all([
-                fetch(`/api/industry/data?period=${period}`).then(r => r.json()),
-                fetch(`/api/backtest/prices?period=${period}`).then(r => r.json()),
-                fetch('/api/exchange-rate?history=true').then(r => r.json())
-            ]);
-            
-            // 取得匯率歷史 {date: rate}
-            const exchangeRates = exchangeRateData.history || {};
-            console.log(`💱 載入 ${Object.keys(exchangeRates).length} 筆匯率歷史`);
-            
-            // 驗證 API 返回的數據範圍
-            if (industryData.dates && industryData.dates.length > 0) {
-                const apiStartDate = industryData.dates[0];
-                const apiEndDate = industryData.dates[industryData.dates.length - 1];
-                console.log(`📊 API 數據範圍: ${apiStartDate} ~ ${apiEndDate} (共 ${industryData.dates.length} 天)`);
-                
-                if (this.settings.start_date < apiStartDate) {
-                    console.warn(`⚠️ 用戶起始日期 ${this.settings.start_date} 早於 API 數據 ${apiStartDate}`);
-                }
-            }
-            
-            console.log('📊 執行前端回測計算...');
-            
-            // 建立前端回測引擎
-            const engine = new Engine({
-                initialCapital: this.settings.initial_capital,
-                amountPerStock: this.settings.amount_per_stock,
-                maxPositions: this.settings.max_positions,
-                market: this.settings.market
-            });
-            
-            // 設定條件（轉換格式）
-            const buyConfig = {};
+            // ===== 呼叫後端 API 執行回測 =====
+            // 轉換前端設定為後端 API 格式
+            const buyConditions = {};
             this.settings.buy_conditions.forEach(key => {
-                buyConfig[key] = { enabled: true, params: this.settings.params };
-            });
-            engine.setBuyConditions(buyConfig);
-            
-            // 賣出條件：移除 'sell_' 前綴
-            const sellConfig = {};
-            this.settings.sell_conditions.forEach(key => {
-                const newKey = key.replace(/^sell_/, '');  // sell_sharpe_fail -> sharpe_fail
-                sellConfig[newKey] = { enabled: true, params: this.settings.params };
-            });
-            engine.setSellConditions(sellConfig);
-            
-            // 再平衡：移除 'rebal_' 前綴
-            if (this.settings.rebalance) {
-                const rebalKey = this.settings.rebalance.replace(/^rebal_/, '');  // rebal_batch -> batch
-                engine.setRebalanceStrategy(rebalKey, this.settings.params);
-            }
-            
-            // 轉換矩陣格式：二維陣列 [dateIdx][tickerIdx] -> {date: {ticker: value}}
-            const convertMatrixToDict = (matrix, dates, tickers) => {
-                const result = {};
-                if (!matrix || !Array.isArray(matrix)) return result;
-                
-                dates.forEach((date, dateIdx) => {
-                    const row = matrix[dateIdx];
-                    if (!row) return;
-                    
-                    result[date] = {};
-                    tickers.forEach((ticker, tickerIdx) => {
-                        const value = row[tickerIdx];
-                        if (value !== null && value !== undefined && !Number.isNaN(value)) {
-                            result[date][ticker] = value;
-                        }
-                    });
-                });
-                return result;
-            };
-            
-            const sharpeValuesDict = convertMatrixToDict(industryData.sharpe, industryData.dates, industryData.tickers);
-            const growthValuesDict = convertMatrixToDict(industryData.growth, industryData.dates, industryData.tickers);
-            
-            console.log('📊 數據轉換完成:', {
-                dates: industryData.dates.length,
-                tickers: industryData.tickers.length,
-                sharpeValuesKeys: Object.keys(sharpeValuesDict).length,
-                growthValuesKeys: Object.keys(growthValuesDict).length,
-                sampleSharpe: sharpeValuesDict[industryData.dates[industryData.dates.length - 1]]
-            });
-            
-            // 準備回測數據
-            const backtestData = {
-                dates: industryData.dates,
-                prices: pricesData.prices,
-                stockInfo: industryData.stockInfo,
-                sharpeRank: industryData.sharpeRank,
-                growthRank: industryData.growthRank,
-                sharpeValues: sharpeValuesDict,
-                growthValues: growthValuesDict,
-                exchangeRates  // TWD/USD 匯率歷史
-            };
-            
-            // 執行回測
-            const result = await engine.run(backtestData, {
-                startDate: this.settings.start_date,
-                endDate: this.settings.end_date,
-                onProgress: (progress) => {
-                    if (runBtn) {
-                        runBtn.textContent = `⏳ ${Math.round(progress.current / progress.total * 100)}%`;
-                    }
+                buyConditions[key] = { enabled: true };
+                // 加入對應參數
+                if (key === 'sharpe_rank') buyConditions[key].top_n = this.settings.params.sharpe_top_n || 15;
+                if (key === 'sharpe_threshold') buyConditions[key].threshold = this.settings.params.sharpe_threshold || 1;
+                if (key === 'sharpe_streak') {
+                    buyConditions[key].days = this.settings.params.sharpe_consecutive_days || 3;
+                    buyConditions[key].top_n = 10;
+                }
+                if (key === 'growth_rank') buyConditions[key].top_n = this.settings.params.growth_top_k || 7;
+                if (key === 'growth_streak') {
+                    buyConditions[key].days = this.settings.params.growth_consecutive_days || 2;
+                    buyConditions[key].percentile = 30;
                 }
             });
             
-            if (!result.success) {
-                throw new Error(result.error || '回測失敗');
+            const sellConditions = {};
+            this.settings.sell_conditions.forEach(key => {
+                const condKey = key.replace(/^sell_/, '');
+                sellConditions[condKey] = { enabled: true };
+                if (condKey === 'sharpe_fail') {
+                    sellConditions[condKey].periods = this.settings.params.sharpe_disqualify_periods || 2;
+                    sellConditions[condKey].top_n = this.settings.params.sharpe_disqualify_n || 15;
+                }
+                if (condKey === 'growth_fail') {
+                    sellConditions[condKey].days = this.settings.params.growth_disqualify_days || 5;
+                    sellConditions[condKey].threshold = 0;
+                }
+                if (condKey === 'not_selected') {
+                    sellConditions[condKey].periods = this.settings.params.buy_not_selected_periods || 3;
+                }
+                if (condKey === 'drawdown') {
+                    sellConditions[condKey].threshold = (this.settings.params.price_breakdown_pct || 40) / 100;
+                }
+                if (condKey === 'weakness') {
+                    sellConditions[condKey].rank_k = this.settings.params.relative_weakness_k || 20;
+                    sellConditions[condKey].periods = this.settings.params.relative_weakness_periods || 3;
+                }
+            });
+            
+            const rebalanceStrategy = {
+                type: (this.settings.rebalance || 'rebal_delayed').replace(/^rebal_/, ''),
+                batch_ratio: this.settings.params.investRatio || 0.20,
+                top_n: 5,
+                sharpe_threshold: 0,
+                concentrate_top_k: this.settings.params.concentrate_top_k || 3,
+                lead_margin: 0.30
+            };
+            
+            const apiPayload = {
+                initial_capital: this.settings.initial_capital,
+                amount_per_stock: this.settings.amount_per_stock,
+                max_positions: this.settings.max_positions,
+                market: this.settings.market,
+                start_date: this.settings.start_date,
+                end_date: this.settings.end_date,
+                rebalance_freq: this.settings.rebalance_freq,
+                buy_conditions: buyConditions,
+                sell_conditions: sellConditions,
+                rebalance_strategy: rebalanceStrategy
+            };
+            
+            console.log('📤 API 請求:', apiPayload);
+            
+            const response = await fetch('/api/backtest/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(apiPayload)
+            });
+            
+            const apiResult = await response.json();
+            
+            if (!apiResult.success) {
+                throw new Error(apiResult.error || '回測失敗');
             }
             
-            console.log('📊 原始回測結果:', result);
+            console.log('📥 後端回測結果:', apiResult);
             
-            // 檢查日期是否有調整（用戶設定的日期可能不是交易日）
-            const dateMetadata = result.dateMetadata;
-            if (dateMetadata) {
+            // 轉換後端結果為前端格式
+            const backendResult = apiResult.result;
+            
+            // 轉換 trades 格式（後端返回的 price 可能是字串如 "$123.45 USD"）
+            const convertedTrades = (backendResult.trades || []).map(t => {
+                // 解析 price（可能是 "$123.45 USD" 或數字）
+                let priceValue = t.price;
+                if (typeof priceValue === 'string') {
+                    // 移除 $ 和幣別符號，只保留數字
+                    priceValue = parseFloat(priceValue.replace(/[^0-9.-]/g, '')) || 0;
+                }
+                
+                // 解析 profit（可能是 "$1,234.56 USD" 或數字）
+                let profitValue = t.profit;
+                if (typeof profitValue === 'string') {
+                    profitValue = parseFloat(profitValue.replace(/[^0-9.-]/g, '')) || 0;
+                }
+                
+                return {
+                    ticker: t.symbol || t.ticker,
+                    action: (t.type || t.action || 'buy').toLowerCase(),
+                    date: t.date,
+                    shares: t.shares,
+                    price: priceValue,
+                    pnl: profitValue,
+                    reason: t.reason || '',
+                    buyDate: t.buy_date || null
+                };
+            });
+            
+            const result = {
+                success: true,
+                metrics: {
+                    totalReturnPct: backendResult.metrics.total_return,
+                    annualizedReturn: backendResult.metrics.annualized_return,
+                    tradeStats: {
+                        totalTrades: backendResult.metrics.total_trades,
+                        winRate: backendResult.metrics.win_rate
+                    }
+                },
+                equityCurve: backendResult.equity_curve.map(p => ({
+                    date: p.date,
+                    equity: p.equity,
+                    cash: p.cash || 0,
+                    holdingsValue: p.holdingsValue || 0,
+                    holdings: p.holdings || {}
+                })),
+                trades: convertedTrades
+            };
+            
+            // 紀錄日期範圍
+            if (backendResult.date_range) {
+                const dateMetadata = {
+                    actualStart: backendResult.date_range.start,
+                    actualEnd: backendResult.date_range.end,
+                    configuredStart: this.settings.start_date,
+                    configuredEnd: this.settings.end_date,
+                    startMismatch: backendResult.date_range.start !== this.settings.start_date,
+                    endMismatch: backendResult.date_range.end !== this.settings.end_date
+                };
                 this.dateMetadata = dateMetadata;
                 
-                // 如果日期有調整，顯示通知
                 if (dateMetadata.startMismatch || dateMetadata.endMismatch) {
-                    let dateNote = '📅 日期調整：';
-                    if (dateMetadata.startMismatch) {
-                        dateNote += `起始 ${dateMetadata.configuredStart} → ${dateMetadata.actualStart}`;
-                    }
-                    if (dateMetadata.endMismatch) {
-                        dateNote += (dateMetadata.startMismatch ? '，' : '') + 
-                                    `結束 ${dateMetadata.configuredEnd} → ${dateMetadata.actualEnd}`;
-                    }
-                    dateNote += '（配置日期為非交易日）';
-                    console.warn(dateNote);
                     this.showDateAdjustmentNotice(dateMetadata);
                 }
             }
@@ -621,58 +516,54 @@ export class BacktestEngine {
             const equityCurve = result.equityCurve || [];
             const lastPoint = equityCurve.length > 0 ? equityCurve[equityCurve.length - 1] : null;
             
-            // 計算 benchmark curve（使用回測的價格數據）
-            const tradingDates = equityCurve.map(p => p.date);
-            const benchmarkResult = this.calculateBenchmarkCurve(
-                pricesData.prices, 
-                tradingDates, 
-                this.settings.initial_capital
-            );
+            // 直接使用後端計算的指標
+            const maxDrawdown = backendResult.metrics.max_drawdown;
+            const strategySharpe = backendResult.metrics.sharpe_ratio;
             
-            // 使用本地計算的最大回撤（確保正確）
-            const maxDrawdown = this.calculateMaxDrawdown(equityCurve);
-            
-            // 計算策略夏普比率
-            const strategySharpe = this.calculateSharpeRatio(equityCurve);
-            
-            // 計算 benchmark 夏普比率
-            const benchmarkSharpe = this.calculateSharpeRatio(benchmarkResult.curve);
-            
-            // 計算相對夏普比率（策略夏普 / benchmark 夏普）
-            // 大於 1 表示優於市場，小於 1 表示不如市場
-            const sharpeVsBenchmark = benchmarkSharpe !== 0 ? strategySharpe / benchmarkSharpe : strategySharpe;
+            // 暫時使用策略 sharpe（後續可加入 benchmark 比較）
+            const sharpeVsBenchmark = strategySharpe;
             
             console.log('📊 風險指標:', {
                 maxDrawdown,
                 strategySharpe,
-                benchmarkSharpe,
-                sharpeVsBenchmark,
-                benchmarkMarketName: benchmarkResult.marketName
+                sharpeVsBenchmark
             });
             
-            // 轉換 trades 格式 (BUY/SELL -> buy/sell, profit -> pnl)
+            // 轉換 trades 格式 (後端使用 symbol/type，前端使用 ticker/action)
+            // price 已在前面 convertedTrades 轉換為數字
             const trades = (result.trades || []).map(t => ({
                 date: t.date,
-                action: t.action.toLowerCase(),
-                ticker: t.ticker,
-                price: t.price,
+                action: (t.type || t.action || 'buy').toLowerCase(),
+                ticker: t.symbol || t.ticker,
+                price: typeof t.price === 'number' ? t.price : parseFloat(String(t.price).replace(/[^0-9.-]/g, '')) || 0,
                 shares: t.shares,
-                pnl: t.profit || 0,
-                buyDate: t.entryDate || null
+                pnl: typeof t.pnl === 'number' ? t.pnl : parseFloat(String(t.pnl).replace(/[^0-9.-]/g, '')) || 0,
+                buyDate: t.buyDate || t.entry_date || t.entryDate || null
             }));
             
-            // 從最後一天的 equityCurve 取得持有資訊
-            const lastHoldings = lastPoint?.holdings || {};
-            const holdings = Object.entries(lastHoldings).map(([ticker, h]) => ({
-                ticker,
+            // 使用後端返回的當前持倉 (後端使用 symbol，前端使用 ticker)
+            const holdings = (backendResult.current_holdings || []).map(h => ({
+                ticker: h.symbol || h.ticker,
                 shares: h.shares,
-                avgCost: h.avgCost,
-                currentPrice: h.currentPrice,
-                marketValue: h.marketValue,
-                profit: h.profit,
-                buyDate: h.buyDate,
-                industry: h.industry || ''
+                avgCost: h.avg_cost,
+                currentPrice: h.current_price,
+                marketValue: h.market_value,
+                profit: h.pnl_pct || h.unrealized_pnl || 0,
+                buyDate: h.buy_date || null,
+                industry: h.industry || '',
+                country: h.country || 'US',
+                exchangeRate: 1
             })).sort((a, b) => b.marketValue - a.marketValue);
+            
+            // 取得後端計算的 benchmark 曲線
+            const benchmarkCurve = (backendResult.benchmark_curve || []).map(p => ({
+                date: p.date,
+                equity: p.equity
+            }));
+            // fallback: 與前端 K 線圖一致
+            const benchmarkMarketName = backendResult.benchmark_name || 
+                (this.settings.market === 'tw' ? '台灣加權指數' : 
+                 this.settings.market === 'us' ? 'NASDAQ' : '國際加權指數');
             
             this.results = {
                 totalReturn: metrics.totalReturnPct || 0,
@@ -682,8 +573,8 @@ export class BacktestEngine {
                 winRate: metrics.tradeStats?.winRate || 0,
                 tradeCount: metrics.tradeStats?.totalTrades || 0,
                 equityCurve,
-                benchmarkCurve: benchmarkResult.curve,
-                benchmarkMarketName: benchmarkResult.marketName,
+                benchmarkCurve,
+                benchmarkMarketName,
                 trades,
                 holdings
             };
@@ -1007,15 +898,18 @@ export class BacktestEngine {
         const holdingsSnapshot = point.holdings || {};
         
         // 轉換為 displayHoldings 需要的格式
+        // 後端欄位: shares, avgCost, currentPrice, marketValue, pnlPct, buyDate, industry, country
         const holdingsArray = Object.entries(holdingsSnapshot).map(([ticker, h]) => ({
             ticker,
             shares: h.shares,
             avgCost: h.avgCost,
             currentPrice: h.currentPrice,
-            marketValue: h.shares * h.currentPrice,
-            profit: h.profit,
+            marketValue: h.marketValue || (h.shares * h.currentPrice),
+            profit: h.pnlPct || 0,  // 後端使用 pnlPct
             buyDate: h.buyDate,
-            industry: h.industry
+            industry: h.industry,
+            country: h.country || 'US',
+            exchangeRate: 1
         })).sort((a, b) => b.marketValue - a.marketValue);
         
         // 傳遞現金和總資產資訊
@@ -1083,7 +977,7 @@ export class BacktestEngine {
             const cashInfo = cash !== null ? `
                 <div class="holdings-summary">
                     <span class="holdings-count">無持股</span>
-                    <span class="holdings-total">現金: $${Math.round(cash).toLocaleString()} (100%)</span>
+                    <span class="holdings-total">現金: $${Math.round(cash).toLocaleString()} TWD (100%)</span>
                 </div>
             ` : '<div class="holdings-empty">無持有股票（所有部位已平倉）</div>';
             
@@ -1094,8 +988,16 @@ export class BacktestEngine {
             return;
         }
         
+        // 按買進日期降序排列（最新買進的在最上面）
+        const sortedHoldings = [...holdings].sort((a, b) => {
+            if (!a.buyDate && !b.buyDate) return 0;
+            if (!a.buyDate) return 1;
+            if (!b.buyDate) return -1;
+            return b.buyDate.localeCompare(a.buyDate);
+        });
+        
         // 計算持股市值
-        const holdingsValue = holdings.reduce((sum, h) => sum + h.marketValue, 0);
+        const holdingsValue = sortedHoldings.reduce((sum, h) => sum + h.marketValue, 0);
         
         // 如果有傳入 cash，使用它；否則從 totalEquity 反推
         const cashAmount = cash !== null ? cash : (totalEquity !== null ? totalEquity - holdingsValue : 0);
@@ -1108,24 +1010,26 @@ export class BacktestEngine {
         container.innerHTML = `
             <div class="holdings-header">${dateLabel}</div>
             <div class="holdings-summary">
-                <span class="holdings-count">持有 ${holdings.length} 檔</span>
-                <span class="holdings-cash">現金: $${Math.round(cashAmount).toLocaleString()} (${cashPct}%)</span>
-                <span class="holdings-stocks-value">持股: $${Math.round(holdingsValue).toLocaleString()} (${holdingsPct}%)</span>
-                <span class="holdings-total">總資產: $${Math.round(equity).toLocaleString()}</span>
+                <span class="holdings-count">持有 ${sortedHoldings.length} 檔</span>
+                <span class="holdings-cash">現金: $${Math.round(cashAmount).toLocaleString()} TWD (${cashPct}%)</span>
+                <span class="holdings-stocks-value">持股: $${Math.round(holdingsValue).toLocaleString()} TWD (${holdingsPct}%)</span>
+                <span class="holdings-total">總資產: $${Math.round(equity).toLocaleString()} TWD</span>
             </div>
-            ${holdings.map(h => {
+            ${sortedHoldings.map(h => {
                 const profitClass = h.profit >= 0 ? 'positive' : 'negative';
                 const profitStr = (h.profit >= 0 ? '+' : '') + h.profit.toFixed(1) + '%';
                 // 計算單檔持股佔總資產比例
                 const weight = equity > 0 ? (h.marketValue / equity * 100).toFixed(1) : 0;
+                // 幣別標示
+                const currency = (h.country?.toUpperCase() === 'US') ? 'USD' : 'TWD';
                 
                 return `
                     <div class="holdings-item">
                         <span class="holdings-ticker">${h.ticker} <span class="holdings-industry">(${h.industry})</span></span>
                         <span class="holdings-weight">${weight}%</span>
-                        <span class="holdings-shares">${h.shares} 股</span>
-                        <span class="holdings-cost">成本: $${h.avgCost.toFixed(2)}</span>
-                        <span class="holdings-current">現價: $${h.currentPrice.toFixed(2)}</span>
+                        <span class="holdings-shares">${h.shares.toFixed(2)} 股</span>
+                        <span class="holdings-cost">成本: $${h.avgCost.toFixed(2)} ${currency}</span>
+                        <span class="holdings-current">現價: $${h.currentPrice.toFixed(2)} ${currency}</span>
                         <span class="holdings-profit ${profitClass}">${profitStr}</span>
                         <span class="holdings-buy-date">買: ${h.buyDate}</span>
                     </div>
@@ -1135,7 +1039,7 @@ export class BacktestEngine {
     }
     
     /**
-     * 重置回測
+     * 重置回測（與 index.html 預設 checked 一致）
      */
     reset() {
         this.clearPreviousResults();
@@ -1145,27 +1049,29 @@ export class BacktestEngine {
         // 重置表單
         document.getElementById('bt-initial-capital').value = '1000000';
         
-        // 重置買入條件
+        // 重置買入條件 - A類（sharpe_rank, sharpe_threshold 勾選）
         document.querySelectorAll('input[name="bt-filter-a"]').forEach(input => {
-            input.checked = input.value === 'sharpe_rank';
+            input.checked = ['sharpe_rank', 'sharpe_threshold'].includes(input.value);
         });
         
+        // 重置買入條件 - B類（growth_streak 勾選）
         document.querySelectorAll('input[name="bt-growth-rule"]').forEach(input => {
             input.checked = input.value === 'growth_streak';
         });
         
+        // 重置買入條件 - C類（sort_sharpe 勾選）
         document.querySelectorAll('input[name="bt-pick-rule"]').forEach(input => {
-            input.checked = input.value === 'sort_industry';
+            input.checked = input.value === 'sort_sharpe';
         });
         
-        // 重置賣出條件
+        // 重置賣出條件（sharpe_fail, drawdown 勾選）
         document.querySelectorAll('input[name="bt-sell-rule"]').forEach(input => {
             input.checked = ['sell_sharpe_fail', 'sell_drawdown'].includes(input.value);
         });
         
-        // 重置投入方式
+        // 重置投入方式（delayed 勾選）
         document.querySelectorAll('input[name="bt-invest-rule"]').forEach(input => {
-            input.checked = input.value === 'rebal_batch';
+            input.checked = input.value === 'rebal_delayed';
         });
         
         this.updateRiskIndicator();

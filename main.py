@@ -1,15 +1,34 @@
 """
 FinPack API Server - 入口點
 
-啟動 Flask 應用程式，載入所有資料模組並註冊 API 路由
+啟動 Flask 應用程式
+
+模組架構（相互獨立）：
+- core: 資料層（DataContainer, Indicators, Currency）
+- backtest: 回測引擎（BacktestEngine）
+- web: Flask 路由（stock_bp, market_bp, backtest_bp）
 """
 import os
 import sys
+
+# 強制 stdout 即時輸出（不緩衝）
+sys.stdout.reconfigure(line_buffering=True)
+
 from flask import Flask, send_from_directory, jsonify
 
-# 載入資料容器與路由
-from src import get_container
-from routes import register_blueprints
+from core import container
+from web.routes import stock_bp, market_bp, backtest_bp
+
+
+def register_blueprints(app):
+    """註冊所有 Blueprint"""
+    app.register_blueprint(market_bp, url_prefix='/api')
+    app.register_blueprint(stock_bp, url_prefix='/api')
+    app.register_blueprint(backtest_bp, url_prefix='/api')
+    
+    print("  ✓ market_bp → /api/market-data, /api/kline/<symbol>")
+    print("  ✓ stock_bp → /api/stocks, /api/industry/data")
+    print("  ✓ backtest_bp → /api/backtest/run, /api/backtest/config")
 
 
 def get_resource_path(relative_path):
@@ -41,7 +60,7 @@ def create_app():
     
     # 預載資料
     print("\n📦 載入資料容器...")
-    container = get_container()
+    # container 已在 import 時自動初始化
     print(f"✅ 資料載入完成: {len(container.get_all_tickers())} 檔股票")
     
     # 註冊 API 路由
@@ -65,7 +84,6 @@ def create_app():
     @app.route('/api/health')
     def health_check():
         """API 健康檢查"""
-        container = get_container()
         return jsonify({
             'status': 'ok',
             'stocks_count': len(container.get_all_tickers()),

@@ -1,2 +1,39 @@
-/build
-/build_venv
+# ===== Build Artifacts =====
+/build/
+/build_venv/
+/dist/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# ===== Virtual Environment =====
+.venv/
+venv/
+ENV/
+
+# ===== Cache =====
+cache/*.pkl
+*.pkl
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== Environment =====
+.env
+.env.local
+*.local
+
+# ===== Logs =====
+*.log
+
+# ===== Test =====
+*.png

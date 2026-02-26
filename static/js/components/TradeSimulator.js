@@ -318,10 +318,12 @@ export class TradeSimulator {
                 
                 // 更新持倉
                 if (!this.holdings[ticker]) {
-                    this.holdings[ticker] = { quantity: 0, totalCost: 0, country };
+                    this.holdings[ticker] = { quantity: 0, totalCost: 0, totalCostOriginal: 0, country };
                 }
                 this.holdings[ticker].quantity += quantity;
                 this.holdings[ticker].totalCost += actualAmountTWD;
+                // 儲存原幣成本（美股 USD，台股 TWD）
+                this.holdings[ticker].totalCostOriginal += quantity * price;
                 
             } else {
                 // === 賣出邏輯（全部出清） ===
@@ -359,9 +361,11 @@ export class TradeSimulator {
                 ticker,
                 action,
                 quantity,
-                price,
+                price,  // 原幣價格（美股 USD，台股 TWD）
+                amountOriginal: quantity * price,  // 原幣金額
                 amountTWD: actualAmountTWD,
-                country
+                country,
+                exchangeRate: country === 'US' ? this.exchangeRate : 1
             });
             
             // 更新顯示
@@ -385,6 +389,7 @@ export class TradeSimulator {
         if (tradeIndex === -1) return;
         
         const trade = this.trades[tradeIndex];
+        const amountOriginal = trade.amountOriginal || (trade.quantity * trade.price);
         
         // 反向操作
         if (trade.action === 'buy') {
@@ -393,6 +398,7 @@ export class TradeSimulator {
             if (this.holdings[trade.ticker]) {
                 this.holdings[trade.ticker].quantity -= trade.quantity;
                 this.holdings[trade.ticker].totalCost -= trade.amountTWD;
+                this.holdings[trade.ticker].totalCostOriginal -= amountOriginal;
                 if (this.holdings[trade.ticker].quantity <= 0) {
                     delete this.holdings[trade.ticker];
                 }
@@ -401,10 +407,11 @@ export class TradeSimulator {
             // 取消賣出 = 扣除現金，增加持倉
             this.cash -= trade.amountTWD;
             if (!this.holdings[trade.ticker]) {
-                this.holdings[trade.ticker] = { quantity: 0, totalCost: 0, country: trade.country };
+                this.holdings[trade.ticker] = { quantity: 0, totalCost: 0, totalCostOriginal: 0, country: trade.country };
             }
             this.holdings[trade.ticker].quantity += trade.quantity;
             this.holdings[trade.ticker].totalCost += trade.amountTWD;
+            this.holdings[trade.ticker].totalCostOriginal += amountOriginal;
         }
         
         // 移除交易紀錄
@@ -431,16 +438,20 @@ export class TradeSimulator {
             
             if (trade.action === 'buy') {
                 if (!holdings[trade.ticker]) {
-                    holdings[trade.ticker] = { quantity: 0, totalCost: 0, country: trade.country };
+                    holdings[trade.ticker] = { quantity: 0, totalCost: 0, totalCostOriginal: 0, country: trade.country };
                 }
                 holdings[trade.ticker].quantity += trade.quantity;
                 holdings[trade.ticker].totalCost += trade.amountTWD;
+                // 累計原幣成本
+                holdings[trade.ticker].totalCostOriginal += trade.amountOriginal || (trade.quantity * trade.price);
             } else {
                 // 賣出
                 if (holdings[trade.ticker]) {
-                    const avgCost = holdings[trade.ticker].totalCost / holdings[trade.ticker].quantity;
+                    const avgCostTWD = holdings[trade.ticker].totalCost / holdings[trade.ticker].quantity;
+                    const avgCostOriginal = holdings[trade.ticker].totalCostOriginal / holdings[trade.ticker].quantity;
                     holdings[trade.ticker].quantity -= trade.quantity;
-                    holdings[trade.ticker].totalCost -= avgCost * trade.quantity;
+                    holdings[trade.ticker].totalCost -= avgCostTWD * trade.quantity;
+                    holdings[trade.ticker].totalCostOriginal -= avgCostOriginal * trade.quantity;
                     
                     if (holdings[trade.ticker].quantity <= 0.0001) {
                         delete holdings[trade.ticker];
@@ -539,28 +550,36 @@ export class TradeSimulator {
                 const priceData = await response.json();
                 
                 if (!priceData.error && priceData.close) {
-                    // 使用收盤價計算市值
-                    const price = priceData.close;
-                    const valueTWD = holding.country === 'US'
-                        ? price * holding.quantity * this.exchangeRate
-                        : price * holding.quantity;
+                    // 使用收盤價計算市值（原幣價格）
+                    const priceOriginal = priceData.close;
+                    const isUS = holding.country === 'US';
+                    const valueTWD = isUS
+                        ? priceOriginal * holding.quantity * this.exchangeRate
+                        : priceOriginal * holding.quantity;
                     
-                    const cost = holding.totalCost;
-                    const pnl = valueTWD - cost;
-                    const pnlPercent = cost > 0 ? (pnl / cost * 100) : 0;
+                    const costTWD = holding.totalCost;
+                    const pnl = valueTWD - costTWD;
+                    const pnlPercent = costTWD > 0 ? (pnl / costTWD * 100) : 0;
+                    
+                    // 計算原幣平均成本
+                    const avgCostOriginal = holding.totalCostOriginal / holding.quantity;
                     
                     result.totalValue += valueTWD;
-                    result.totalCost += cost;
+                    result.totalCost += costTWD;
                     result.unrealizedPnL += pnl;
                     
                     result.holdings.push({
                         ticker,
                         quantity: holding.quantity,
                         country: holding.country,
-                        cost,
-                        value: valueTWD,
+                        costTWD,
+                        valueTWD,
                         pnl,
-                        pnlPercent
+                        pnlPercent,
+                        // 原幣資訊（用於顯示）
+                        avgCostOriginal,
+                        priceOriginal,
+                        currency: isUS ? 'USD' : 'TWD'
                     });
                 }
             } catch (error) {
@@ -614,22 +633,22 @@ export class TradeSimulator {
         
         // 計算截至該日期的現金餘額（時間旅行！）
         const cashAsOfDate = dateForValue ? this.getCashAsOfDate(dateForValue) : this.cash;
-        document.getElementById('cash-balance').textContent = `$${cashAsOfDate.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`;
+        document.getElementById('cash-balance').textContent = `$${cashAsOfDate.toLocaleString('zh-TW', { maximumFractionDigits: 0 })} TWD`;
         
         // 計算持倉市值和損益（使用時間旅行後的持倉）
         const holdingsData = await this.calculateHoldingsValueWithPnL();
         const holdingsValue = holdingsData.totalValue;
-        document.getElementById('holdings-value').textContent = `$${holdingsValue.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`;
+        document.getElementById('holdings-value').textContent = `$${holdingsValue.toLocaleString('zh-TW', { maximumFractionDigits: 0 })} TWD`;
         
         // 計算總資產（使用時間旅行後的現金）
         const totalAssets = cashAsOfDate + holdingsValue;
-        document.getElementById('total-assets').textContent = `$${totalAssets.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`;
+        document.getElementById('total-assets').textContent = `$${totalAssets.toLocaleString('zh-TW', { maximumFractionDigits: 0 })} TWD`;
         
         // 計算總損益
         const profitLoss = totalAssets - this.initialCapital;
         const profitLossPercent = (profitLoss / this.initialCapital * 100).toFixed(2);
         const profitLossEl = document.getElementById('profit-loss');
-        profitLossEl.textContent = `$${profitLoss.toLocaleString('zh-TW', { maximumFractionDigits: 0 })} (${profitLossPercent}%)`;
+        profitLossEl.textContent = `$${profitLoss.toLocaleString('zh-TW', { maximumFractionDigits: 0 })} TWD (${profitLossPercent}%)`;
         
         // 設定顏色
         profitLossEl.classList.remove('positive', 'negative');
@@ -679,14 +698,23 @@ export class TradeSimulator {
             const pnlClass = h.pnl >= 0 ? 'positive' : 'negative';
             const sign = h.pnl >= 0 ? '+' : '';
             
+            // 格式化原幣成本和現價
+            const currency = h.currency || 'TWD';
+            const avgCostStr = h.avgCostOriginal?.toFixed(2) || '0.00';
+            const priceStr = h.priceOriginal?.toFixed(2) || '0.00';
+            
             return `
                 <div class="holding-pnl-item">
                     <div class="holding-info">
                         <span class="holding-ticker">${h.ticker}</span>
                         <span class="holding-qty">${qtyStr} 股</span>
                     </div>
+                    <div class="holding-price-info">
+                        <span class="holding-cost">成本 $${avgCostStr} ${currency}</span>
+                        <span class="holding-price">現價 $${priceStr} ${currency}</span>
+                    </div>
                     <div class="holding-pnl-values">
-                        <span class="holding-unrealized ${pnlClass}">${sign}$${pnlStr}</span>
+                        <span class="holding-unrealized ${pnlClass}">${sign}$${pnlStr} TWD</span>
                         <span class="holding-pct">${sign}${pctStr}%</span>
                     </div>
                 </div>

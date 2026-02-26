@@ -1695,12 +1695,14 @@ body {
 .holding-pnl-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 6px 8px;
-    margin-bottom: 4px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    margin-bottom: 6px;
     background: var(--bg-card);
     border-radius: var(--radius-sm);
     font-size: 11px;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .holding-pnl-item:last-child {
@@ -1711,6 +1713,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 80px;
 }
 
 .holding-ticker {
@@ -1723,11 +1726,26 @@ body {
     font-size: 10px;
 }
 
+.holding-price-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.holding-cost,
+.holding-price {
+    white-space: nowrap;
+}
+
 .holding-pnl-values {
     text-align: right;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 90px;
 }
 
 .holding-unrealized {

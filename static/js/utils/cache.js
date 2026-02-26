@@ -9,8 +9,7 @@
  * 數據來源：/api/industry/data → sharpe_matrix, growth_matrix
  */
 
-// 不可交易的 industry 類型（由 TradingView 分類決定）
-const NON_TRADABLE_INDUSTRIES = new Set(['Market Index', 'Index']);
+import { NON_TRADABLE_INDUSTRIES } from '../config.js';
 
 export class IndustryDataCache {
     constructor() {

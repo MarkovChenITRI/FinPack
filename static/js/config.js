@@ -1,9 +1,13 @@
 /**
- * config.js - API 端點配置
+ * config.js - 前端配置中心
  * 
- * 統一定義所有後端 API 路徑，方便維護與修改
+ * 統一定義：
+ *   - API 端點路徑
+ *   - 預設參數
+ *   - 常數定義
  */
 
+// ===== API 端點 =====
 export const API = {
     // 市場數據
     MARKET_DATA: '/api/market-data',
@@ -20,8 +24,15 @@ export const API = {
     BACKTEST_PRICES: '/api/backtest/prices'
 };
 
+// ===== 預設參數 =====
 export const DEFAULTS = {
     INITIAL_CAPITAL: 1000000,
     EXCHANGE_RATE: 32.0,
-    TOP_N: 15
+    TOP_N: 15,
+    AMOUNT_PER_STOCK: 100000,
+    MAX_POSITIONS: 10
 };
+
+// ===== 常數定義 =====
+// 不可交易的產業類型（由 TradingView 分類決定）
+export const NON_TRADABLE_INDUSTRIES = new Set(['Market Index', 'Index']);
