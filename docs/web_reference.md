@@ -21,12 +21,19 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
 
 ---
 
-## 二、MarketDataLoader（web/market.py）
+## 二、MarketDataLoader（core/market.py）
 
-### 設計原則
-- 初始化時從 `cache/market_data.pkl` 載入所有市場資料
-- 伺服器運行期間從快取切片，不再即時抓取
-- 使用 `preload()` 主動更新快取
+`MarketDataLoader` 已移至 `core/market.py`（資料層）。`web/market.py` 現為薄 re-export，`web/__init__.py` 無需修改。
+
+路由層透過 `container` 委派方法存取，無需直接 import `MarketDataLoader`：
+
+```python
+# 路由層推薦用法（透過 container）
+from core import container
+data = container.get_market_data(period)
+kline = container.get_kline(symbol, period)
+rate = container.get_exchange_rate()
+```
 
 ### 預載符號
 
@@ -40,16 +47,7 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
 | `^GSPC` | S&P 500 |
 | `TWD=X` | 美元兌台幣匯率 |
 
-### 主要方法
-
-| 方法 | 說明 |
-|------|------|
-| `preload()` | 從 yfinance 抓取 max 範圍資料並儲存快取 |
-| `get_kline(symbol, period)` | 取得指定標的 K 線（從快取切片） |
-| `get_weighted_kline(symbol, period, aligned_data)` | 計算加權指數 K 線 |
-| `get_all_market_data(period)` | 取得所有市場指數面板資料 |
-
-> ⚠️ **已知問題**：`MarketDataLoader` 目前未連接至 `DataContainer`，導致 market 相關 API 失效。詳見 [known_issues.md](known_issues.md)。
+快取更新由 `main.py` 啟動時呼叫 `container.market_loader.preload_all()`（含 `max_staleness_days=1` 保護）。詳見 [core_reference.md](core_reference.md#八marketdataloadercoremarketpy)。
 
 ---
 
@@ -97,8 +95,6 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
 ---
 
 ### 3.2 market_bp（routes/market.py）
-
-> ⚠️ **下列所有路由目前失效**，原因：`container` 未提供所需方法。詳見 [known_issues.md](known_issues.md)。
 
 #### GET /api/market-data
 
@@ -198,7 +194,7 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
 }
 ```
 
-> ⚠️ 此路由返回的 `options` 和 `defaults` 來自 `web/routes/backtest.py` 的本地重複定義，而非 `backtest/config.py`。兩者目前內容相同，但若日後更新 `backtest/config.py` 可能會不一致。
+> `options` 和 `defaults` 直接來自 `backtest/config.py`（`CONDITION_OPTIONS`、`DEFAULT_CONFIG`），與回測引擎保持同步。
 
 #### POST /api/backtest/run
 
@@ -253,7 +249,7 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
     "equity_curve": [
       {"date": "2025-01-02", "equity": 1000000}
     ],
-    "benchmark_curve": [],
+    "benchmark_curve": [{"date": "2025-01-02", "equity": 1000000}],
     "benchmark_name": "NASDAQ",
     "trades": [...],
     "current_holdings": [...],
@@ -275,8 +271,6 @@ Flask 應用在 `main.py` 中透過 `register_blueprints()` 將三個 Blueprint 
   "error": "錯誤訊息"
 }
 ```
-
-> ⚠️ `benchmark_curve` 目前因 `container.market_loader` 不存在而固定返回空陣列。
 
 ---
 

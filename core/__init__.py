@@ -36,3 +36,4 @@ from .container import (
     DataContainer, container,
     build_close_df, filter_by_market,
 )
+from .market import MarketDataLoader

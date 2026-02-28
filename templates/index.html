@@ -218,7 +218,7 @@ index.html - FinPack 主頁面
                         <div class="backtest-params">
                             <div class="backtest-field">
                                 <label>初始資金 (TWD)</label>
-                                <input type="number" id="bt-initial-capital" value="1000000" min="100000" step="100000">
+                                <input type="number" id="bt-initial-capital" min="100000" step="100000">
                             </div>
                             <div class="backtest-field">
                                 <label>起始日期</label>
@@ -237,15 +237,15 @@ index.html - FinPack 主頁面
                         <div class="backtest-inline-fields">
                             <div class="backtest-field small">
                                 <label>美股費率 (%)</label>
-                                <input type="number" id="bt-us-fee-rate" value="0.3" min="0" max="2" step="0.01">
+                                <input type="number" id="bt-us-fee-rate" min="0" max="2" step="0.01">
                             </div>
                             <div class="backtest-field small">
                                 <label>美股最低 (USD)</label>
-                                <input type="number" id="bt-us-min-fee" value="15" min="0" max="50" step="1">
+                                <input type="number" id="bt-us-min-fee" min="0" max="50" step="1">
                             </div>
                             <div class="backtest-field small">
                                 <label>台股費率 (%)</label>
-                                <input type="number" id="bt-tw-fee-rate" value="0.6" min="0" max="2" step="0.01">
+                                <input type="number" id="bt-tw-fee-rate" min="0" max="2" step="0.01">
                             </div>
                         </div>
                     </div>
@@ -274,7 +274,7 @@ index.html - FinPack 主頁面
                                             <span>🌍 國際</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="radio" name="bt-market" value="us" checked>
+                                            <input type="radio" name="bt-market" value="us">
                                             <span>🇺🇸 美股</span>
                                         </label>
                                         <label class="backtest-checkbox">
@@ -289,20 +289,21 @@ index.html - FinPack 主頁面
                                     <h5 class="backtest-subsection-title">買入範圍 <small>(複選)</small></h5>
                                     <div class="backtest-buy-rules">
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-filter-a" value="sharpe_rank" checked>
+                                            <input type="checkbox" name="bt-filter-a" value="sharpe_rank">
                                             <span>Sharpe Top-</span>
-                                            <input type="number" id="bt-sharpe-top-n" value="15" min="5" max="50" class="inline-input">
+                                            <input type="number" id="bt-sharpe-top-n" min="5" max="50" class="inline-input">
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-filter-a" value="sharpe_threshold" checked>
+                                            <input type="checkbox" name="bt-filter-a" value="sharpe_threshold">
                                             <span>Sharpe ≥</span>
-                                            <input type="number" id="bt-sharpe-threshold" value="1" min="0" max="3" step="0.1" class="inline-input">
+                                            <input type="number" id="bt-sharpe-threshold" min="0" max="3" step="0.1" class="inline-input">
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="checkbox" name="bt-filter-a" value="sharpe_streak">
                                             <span>連續</span>
-                                            <input type="number" id="bt-sharpe-consecutive-days" value="3" min="1" max="10" class="inline-input">
-                                            <span>天在 Top-15</span>
+                                            <input type="number" id="bt-sharpe-consecutive-days" min="1" max="10" class="inline-input">
+                                            <span>天在 Top-</span>
+                                            <input type="number" id="bt-sharpe-streak-top-n" min="1" max="30" class="inline-input">
                                         </label>
                                     </div>
                                 </div>
@@ -312,15 +313,21 @@ index.html - FinPack 主頁面
                                     <h5 class="backtest-subsection-title">成長動能 <small>(可選)</small></h5>
                                     <div class="backtest-buy-rules">
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-growth-rule" value="growth_rank">
-                                            <span>Growth Top-</span>
-                                            <input type="number" id="bt-growth-top-k" value="7" min="1" max="15" class="inline-input">
+                                            <input type="radio" name="bt-growth-rule" value="none">
+                                            <span>不使用成長過濾</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-growth-rule" value="growth_streak" checked>
+                                            <input type="radio" name="bt-growth-rule" value="growth_rank">
+                                            <span>Growth Top-</span>
+                                            <input type="number" id="bt-growth-top-k" min="1" max="15" class="inline-input">
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-growth-rule" value="growth_streak">
                                             <span>Growth 連續</span>
-                                            <input type="number" id="bt-growth-consecutive-days" value="2" min="1" max="5" class="inline-input">
-                                            <span>天在前 50%</span>
+                                            <input type="number" id="bt-growth-consecutive-days" min="1" max="5" class="inline-input">
+                                            <span>天在前</span>
+                                            <input type="number" id="bt-growth-streak-percentile" min="10" max="100" class="inline-input">
+                                            <span>%</span>
                                         </label>
                                     </div>
                                 </div>
@@ -330,12 +337,18 @@ index.html - FinPack 主頁面
                                     <h5 class="backtest-subsection-title">選股方式 <small>(可選)</small></h5>
                                     <div class="backtest-buy-rules">
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-pick-rule" value="sort_sharpe" checked>
+                                            <input type="radio" name="bt-pick-rule" value="none">
+                                            <span>依預設排序</span>
+                                        </label>
+                                        <label class="backtest-checkbox">
+                                            <input type="radio" name="bt-pick-rule" value="sort_sharpe">
                                             <span>按 Sharpe 順序</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-pick-rule" value="sort_industry">
-                                            <span>按 產業+Sharpe 順序</span>
+                                            <input type="radio" name="bt-pick-rule" value="sort_industry">
+                                            <span>按產業分散，每業最多</span>
+                                            <input type="number" id="bt-sort-industry-per-industry" min="1" max="5" class="inline-input">
+                                            <span>檔</span>
                                         </label>
                                     </div>
                                 </div>
@@ -344,11 +357,11 @@ index.html - FinPack 主頁面
                                 <div class="backtest-inline-fields">
                                     <div class="backtest-field small">
                                         <label>每檔投入金額</label>
-                                        <input type="number" id="bt-amount-per-stock" value="100000" min="10000" step="10000">
+                                        <input type="number" id="bt-amount-per-stock" min="10000" step="10000">
                                     </div>
                                     <div class="backtest-field small">
                                         <label>最大持倉數</label>
-                                        <input type="number" id="bt-max-positions" value="10" min="1" max="30">
+                                        <input type="number" id="bt-max-positions" min="1" max="30">
                                     </div>
                                 </div>
                             </div>
@@ -359,36 +372,37 @@ index.html - FinPack 主頁面
                                     <h5 class="backtest-subsection-title">賣出觸發條件 <small>(可多選組合)</small></h5>
                                     <div class="backtest-sell-rules">
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-sell-rule" value="sell_sharpe_fail" checked>
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_sharpe_fail">
                                             <span>Sharpe 排名連續</span>
-                                            <input type="number" id="bt-sharpe-disqualify-periods" value="2" min="1" max="10" class="inline-input">
+                                            <input type="number" id="bt-sharpe-disqualify-periods" min="1" max="10" class="inline-input">
                                             <span>期掉出 Top-</span>
-                                            <input type="number" id="bt-sharpe-disqualify-n" value="15" min="5" max="50" class="inline-input">
+                                            <input type="number" id="bt-sharpe-disqualify-n" min="5" max="50" class="inline-input">
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="checkbox" name="bt-sell-rule" value="sell_growth_fail">
                                             <span>Growth 最近</span>
-                                            <input type="number" id="bt-growth-disqualify-days" value="5" min="3" max="20" class="inline-input">
-                                            <span>天均值 < 0</span>
+                                            <input type="number" id="bt-growth-disqualify-days" min="3" max="20" class="inline-input">
+                                            <span>天均值 &lt; </span>
+                                            <input type="number" id="bt-growth-fail-threshold" min="-10" max="10" step="0.1" class="inline-input">
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="checkbox" name="bt-sell-rule" value="sell_not_selected">
                                             <span>連續</span>
-                                            <input type="number" id="bt-buy-not-selected-periods" value="3" min="1" max="10" class="inline-input">
+                                            <input type="number" id="bt-buy-not-selected-periods" min="1" max="10" class="inline-input">
                                             <span>期未入選買入候選</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="checkbox" name="bt-sell-rule" value="sell_drawdown" checked>
+                                            <input type="checkbox" name="bt-sell-rule" value="sell_drawdown">
                                             <span>價格回撤超過</span>
-                                            <input type="number" id="bt-price-breakdown-pct" value="40" min="20" max="60" class="inline-input">
+                                            <input type="number" id="bt-price-breakdown-pct" min="20" max="60" class="inline-input">
                                             <span>%</span>
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="checkbox" name="bt-sell-rule" value="sell_weakness">
                                             <span>Sharpe 與 Growth 排名皆 ></span>
-                                            <input type="number" id="bt-relative-weakness-k" value="20" min="10" max="50" class="inline-input">
+                                            <input type="number" id="bt-relative-weakness-k" min="10" max="50" class="inline-input">
                                             <span>連續</span>
-                                            <input type="number" id="bt-relative-weakness-periods" value="3" min="1" max="10" class="inline-input">
+                                            <input type="number" id="bt-relative-weakness-periods" min="1" max="10" class="inline-input">
                                             <span>期</span>
                                         </label>
                                     </div>
@@ -406,7 +420,7 @@ index.html - FinPack 主頁面
                                             <span>每日</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="radio" name="bt-rebalance-freq" value="weekly" checked>
+                                            <input type="radio" name="bt-rebalance-freq" value="weekly">
                                             <span>每週</span>
                                         </label>
                                         <label class="backtest-checkbox">
@@ -427,18 +441,24 @@ index.html - FinPack 主頁面
                                         <label class="backtest-checkbox">
                                             <input type="radio" name="bt-invest-rule" value="rebal_batch">
                                             <span>每次投入</span>
-                                            <input type="number" id="bt-batch-ratio" value="20" min="10" max="100" step="10" class="inline-input">
+                                            <input type="number" id="bt-batch-ratio" min="10" max="100" step="10" class="inline-input">
                                             <span>% 可用資金</span>
                                         </label>
                                         <label class="backtest-checkbox">
-                                            <input type="radio" name="bt-invest-rule" value="rebal_delayed" checked>
-                                            <span>等市場轉強再進場 (Sharpe Top5 均值 > 0)</span>
+                                            <input type="radio" name="bt-invest-rule" value="rebal_delayed">
+                                            <span>等市場轉強：Sharpe Top-</span>
+                                            <input type="number" id="bt-delayed-top-n" min="1" max="20" class="inline-input">
+                                            <span>均值 ≥</span>
+                                            <input type="number" id="bt-delayed-sharpe-threshold" min="-2" max="5" step="0.1" class="inline-input">
+                                            <span>才進場</span>
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="radio" name="bt-invest-rule" value="rebal_concentrated">
                                             <span>只在排名前</span>
-                                            <input type="number" id="bt-concentrate-top-k" value="3" min="1" max="10" class="inline-input">
-                                            <span>有明確領先時投入</span>
+                                            <input type="number" id="bt-concentrate-top-k" min="1" max="10" class="inline-input">
+                                            <span>領先幅度 ≥</span>
+                                            <input type="number" id="bt-lead-margin-pct" min="0" max="200" step="5" class="inline-input">
+                                            <span>% 才投入</span>
                                         </label>
                                         <label class="backtest-checkbox">
                                             <input type="radio" name="bt-invest-rule" value="rebal_none">
@@ -477,7 +497,7 @@ index.html - FinPack 主頁面
 
                     <!-- 執行按鈕 -->
                     <div class="backtest-actions">
-                        <button id="bt-run-btn" class="backtest-btn primary">🚀 開始回測</button>
+                        <button id="bt-run-btn" class="backtest-btn primary" disabled>⏳ 載入配置中...</button>
                         <button id="bt-reset-btn" class="backtest-btn secondary">🔄 重置</button>
                     </div>
                 </div>
@@ -559,6 +579,6 @@ index.html - FinPack 主頁面
     </div>
 
     <!-- 使用 ES Modules 載入模組化 JS -->
-    <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/app.js?v=20260228"></script>
 </body>
 </html>

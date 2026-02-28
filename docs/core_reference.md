@@ -30,14 +30,16 @@ core/
 ├── data.py         # 外部資料取得 + 快取 I/O
 ├── align.py        # 日期對齊
 ├── indicator.py    # 衍生指標計算
+├── market.py       # MarketDataLoader（市場指數、匯率快取）
 ├── container.py    # DataContainer singleton + 工具函數
 └── __init__.py     # 統一匯出介面
 ```
 
 **資料流向**：
 ```
-[TradingView API] → data.py → watchlist, stock_info
-[yfinance]        → data.py → raw_data (pickle 快取)
+[TradingView API] → data.py    → watchlist, stock_info
+[yfinance]        → data.py    → raw_data (pickle 快取)
+[yfinance]        → market.py  → market_data (pickle 快取)
                                   ↓
                           align.py → aligned_data, unified_dates
                                           ↓
@@ -255,6 +257,7 @@ filtered_close, filtered_info = filter_by_market(close_df, stock_info, market)
 | `ranking_matrix` | `DataFrame` | 全股票排名矩陣 |
 | `growth_matrix` | `DataFrame` | 全股票 Growth 矩陣 |
 | `fx` | `FX` | 匯率服務實例 |
+| `market_loader` | `MarketDataLoader` | 市場指數與匯率快取服務（`core/market.py`） |
 
 ### 7.4 DataContainer 方法
 
@@ -299,32 +302,38 @@ filtered_close, filtered_info = filter_by_market(close_df, stock_info, market)
 | `get_growth_matrix(start_date, end_date)` | `DataFrame` | 指定範圍 Growth 矩陣 |
 | `get_daily_sharpe_summary(date)` | `Dict` | 指定日期按國家分組的 Sharpe 摘要 |
 
-> **注意**：`DataContainer` **不提供** `get_market_data()`、`get_kline()`、`get_exchange_rate()` 方法。
-> 市場指數資料由 `web/market.py` 的 `MarketDataLoader` 管理。詳見 [known_issues.md](known_issues.md)。
-
----
-
-## 八、MarketDataLoader（web/market.py）
-
-雖然 `MarketDataLoader` 定義於 `web/` 層，其資料功能與 `core/` 密切相關，故於此記錄。
-
-```python
-from web.market import MarketDataLoader
-
-loader = MarketDataLoader()
-# __init__ 時自動從 cache/market_data.pkl 載入快取
-```
+#### 市場資料（委派至 market_loader）
 
 | 方法 | 返回值 | 說明 |
 |------|--------|------|
-| `preload()` | `None` | 從 yfinance 抓取所有市場指數（max 範圍）並儲存快取 |
-| `get_kline(symbol, period)` | `List[Dict]` | 取得指定標的 K 線（從快取切片） |
+| `get_market_data(period, aligned_data=None)` | `Dict` | 取得所有市場指數面板資料 |
+| `get_kline(symbol, period, aligned_data=None)` | `List[Dict]` | 取得單一標的 K 線 |
+| `get_exchange_rate()` | `float` | 取得當前 USD/TWD 匯率 |
+| `get_exchange_rate_history(period)` | `Dict[str, float]` | 取得歷史匯率 `{date_str: rate}` |
+
+---
+
+## 八、MarketDataLoader（core/market.py）
+
+```python
+from core.market import MarketDataLoader
+# 或透過 container 直接使用委派方法（推薦）
+from core import container
+container.get_market_data(period)
+```
+
+`MarketDataLoader` 於 `DataContainer.__init__` 中自動實例化（僅讀快取，無網路）。
+`main.py` 在啟動時呼叫 `container.market_loader.preload_all()` 更新快取（有網路，含 `max_staleness_days=1` 保護）。
+
+| 方法 | 返回值 | 說明 |
+|------|--------|------|
+| `preload_all(aligned_data, max_staleness_days=1)` | `None` | 從 yfinance 更新市場資料快取（有網路） |
 | `get_weighted_kline(symbol, period, aligned_data)` | `List[Dict]` | 取得加權指數 K 線 |
-| `get_all_market_data(period)` | `Dict` | 取得所有市場指數面板資料 |
+| `get_all_market_data(period, aligned_data)` | `Dict` | 取得所有市場指數面板資料 |
+| `get_exchange_rate()` | `float` | 取得最新匯率 |
+| `get_exchange_rate_history(period)` | `Dict` | 取得歷史匯率 |
 
 **快取符號**：`^IXIC`（NASDAQ）、`^TWII`（台灣加權）、`GC=F`（黃金）、`BTC-USD`（比特幣）、`TLT`（長期債券）、`^GSPC`（S&P 500）、`TWD=X`（匯率）
-
-> ⚠️ `MarketDataLoader` 目前**未連接**至 `DataContainer`，導致 market API 路由失效。詳見 [known_issues.md](known_issues.md)。
 
 ---
 

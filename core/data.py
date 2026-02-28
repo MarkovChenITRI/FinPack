@@ -135,34 +135,28 @@ def fetch_all_stock_data(show_progress: bool = True) -> Tuple[dict, dict, dict]:
     raw_data = {}
     all_tickers = list(stock_info.keys())
     total = len(all_tickers)
-    
-    if show_progress:
-        print(f"📊 共 {total} 檔股票待抓取（{DATA_PERIOD}）")
-    
+
+    log_fn = logger.info if show_progress else logger.debug
+    log_fn('[DATA] 共 %d 檔股票待抓取（%s）', total, DATA_PERIOD)
+
     for i, ticker in enumerate(all_tickers):
         industry = stock_info[ticker].get('industry', 'Unknown')
-        is_index = industry in NON_TRADABLE_INDUSTRIES
-        
-        if show_progress:
-            prefix = "📈" if is_index else "  "
-            print(f"{prefix} [{i+1}/{total}] 抓取 {ticker} ({industry})...", end=" ")
-        
         df = fetch_stock_history(ticker)
-        
+
+        prefix = '[IDX]' if industry in NON_TRADABLE_INDUSTRIES else '[STK]'
+
         if df.empty:
-            if show_progress:
-                print("❌ 無資料")
+            log_fn('%s [%3d/%d] %-15s (%s): 無資料，略過', prefix, i + 1, total, ticker, industry)
             continue
-        
+
         if len(df) < MIN_HISTORY_DAYS:
-            if show_progress:
-                print(f"⚠️ 資料太少 ({len(df)} 筆)")
+            logger.warning('%s [%3d/%d] %-15s (%s): 資料太少 (%d 筆)，略過',
+                           prefix, i + 1, total, ticker, industry, len(df))
             continue
-        
+
         raw_data[ticker] = df
-        if show_progress:
-            print(f"✅ {len(df)} 筆")
-    
+        log_fn('%s [%3d/%d] %-15s (%s): %d 筆', prefix, i + 1, total, ticker, industry, len(df))
+
     return raw_data, watchlist, stock_info
 
 

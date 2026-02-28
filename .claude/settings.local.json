@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONIOENCODING=utf-8 python -c \"from core.market import MarketDataLoader; print\\(''core.market OK''\\)\")"
+    ]
+  }
+}

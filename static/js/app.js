@@ -101,7 +101,7 @@ class FinPackApp {
             
             // 初始化回測引擎
             this.backtestEngine = new BacktestEngine();
-            this.backtestEngine.init();
+            await this.backtestEngine.init();
             window.backtestEngine = this.backtestEngine;
 
             // 綁定事件

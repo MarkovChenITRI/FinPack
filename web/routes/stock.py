@@ -14,14 +14,19 @@
 - POST /api/cache/refresh        重新抓取資料
 - GET /api/backtest/prices       回測用價格數據
 """
+import logging
 import math
 import pandas as pd
 from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 
-from core import container
+from core import container, compute_daily_ranks_by_country
+
+logger = logging.getLogger(__name__)
 
 stock_bp = Blueprint('stock', __name__)
+
+PERIOD_DAYS = {'3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825, '6y': 2190}
 
 
 def get_container():
@@ -151,14 +156,13 @@ def get_sharpe_matrix():
 def get_industry_data():
     """API: 獲取完整的產業分析資料"""
     period = request.args.get('period', '1y')
-    print(f"📊 [API] /api/industry/data 請求，period={period}")
+    logger.info('[API] /api/industry/data 請求: period=%s', period)
     
     # 計算時間範圍
     end_date = datetime.now()
-    period_days = {'3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825, '6y': 2190}
-    days = period_days.get(period, 365)
+    days = PERIOD_DAYS.get(period, 365)
     start_date = end_date - timedelta(days=days)
-    
+
     sharpe_matrix = container.sharpe_matrix
     growth_matrix = container.growth_matrix
     
@@ -194,10 +198,10 @@ def get_industry_data():
     growth_data = clean_nan(growth_filtered) if not growth_filtered.empty else []
     
     # 預計算每日排名
-    sharpe_rank = _compute_daily_ranks(sharpe_filtered, stock_info)
-    growth_rank = _compute_daily_ranks(growth_filtered, stock_info) if not growth_filtered.empty else {}
+    sharpe_rank = compute_daily_ranks_by_country(sharpe_filtered, stock_info)
+    growth_rank = compute_daily_ranks_by_country(growth_filtered, stock_info) if not growth_filtered.empty else {}
     
-    print(f"✅ [API] 返回資料: {len(dates)} 天, {len(tickers)} 檔股票")
+    logger.info('[API] /api/industry/data 返回: %d 天, %d 檔股票', len(dates), len(tickers))
     
     return jsonify({
         'dates': dates,
@@ -208,30 +212,6 @@ def get_industry_data():
         'sharpeRank': sharpe_rank,
         'growthRank': growth_rank
     })
-
-
-def _compute_daily_ranks(matrix, stock_info):
-    """預計算每日排名"""
-    if matrix is None or matrix.empty:
-        return {}
-    
-    ranks = {}
-    for date in matrix.index:
-        date_str = str(date)[:10]
-        row = matrix.loc[date].dropna()
-        
-        us_stocks = [(t, v) for t, v in row.items() if stock_info.get(t, {}).get('country') == 'US']
-        tw_stocks = [(t, v) for t, v in row.items() if stock_info.get(t, {}).get('country') == 'TW']
-        
-        us_sorted = [t for t, v in sorted(us_stocks, key=lambda x: x[1], reverse=True)]
-        tw_sorted = [t for t, v in sorted(tw_stocks, key=lambda x: x[1], reverse=True)]
-        
-        ranks[date_str] = {
-            'US': us_sorted,
-            'TW': tw_sorted
-        }
-    
-    return ranks
 
 
 @stock_bp.route('/stock-price/<ticker>')
@@ -257,8 +237,7 @@ def get_backtest_prices():
     
     # 計算時間範圍
     end_date = datetime.now()
-    period_days = {'3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825, '6y': 2190}
-    days = period_days.get(period, 730)
+    days = PERIOD_DAYS.get(period, 730)
     start_date = end_date - timedelta(days=days)
     
     tickers = container.get_all_tickers()

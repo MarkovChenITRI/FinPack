@@ -3,9 +3,12 @@
 
 統一的資料存取介面，供所有入口點共用
 """
+import logging
 import pandas as pd
 from datetime import datetime
 from typing import Optional, List, Dict
+
+logger = logging.getLogger(__name__)
 
 from .config import CACHE_DIR
 from .data import (
@@ -14,6 +17,7 @@ from .data import (
 from .align import align_data_with_bfill
 from .indicator import calculate_all_indicators
 from .currency import FX
+from .market import MarketDataLoader
 
 
 # =============================================================================
@@ -110,42 +114,46 @@ class DataContainer:
         
         if auto_load:
             self.load_or_fetch()
+
+        # 市場資料加載器（載入快取，無網路呼叫）
+        # preload_all() 由 main.py 在啟動時另行呼叫以更新快取
+        self.market_loader = MarketDataLoader()
     
     def load_or_fetch(self, force_refresh: bool = False):
         """載入快取或重新抓取資料"""
         if force_refresh:
-            print("📥 強制重新抓取股票資料...")
+            logger.info('[LOAD] 強制重新抓取股票資料...')
             self.raw_data, self.watchlist, self.stock_info = fetch_all_stock_data()
             self.last_update = datetime.now()
             if self.raw_data:
                 save_stock_cache(self.raw_data, self.watchlist, self.stock_info)
-                print(f"✅ 股票資料抓取完成 ({len(self.raw_data)} 檔)")
+                logger.info('[LOAD] 股票資料抓取完成 (%d 檔)', len(self.raw_data))
         else:
             self.raw_data, self.watchlist, self.stock_info, self.last_update = smart_load_or_fetch()
-        
+
         if self.raw_data:
-            print(f"✅ 原始資料就緒 (最後更新: {self.last_update})")
-            print(f"  📦 raw_data: {len(self.raw_data)} 檔股票")
-        
+            logger.info('[LOAD] 原始資料就緒 (最後更新: %s)', self.last_update)
+            logger.info('[LOAD] raw_data: %d 檔股票', len(self.raw_data))
+
         # 日期對齊
-        print("📅 對齊股票日期...")
+        logger.info('[ALIGN] 對齊股票日期...')
         self.aligned_data, self.unified_dates = align_data_with_bfill(self.raw_data)
-        print(f"✅ 日期對齊完成")
-        print(f"  📅 unified_dates: {len(self.unified_dates) if self.unified_dates is not None else 0} 個交易日")
-        
+        n_dates = len(self.unified_dates) if self.unified_dates is not None else 0
+        logger.info('[ALIGN] 完成: %d 個交易日', n_dates)
+
         # 建立收盤價矩陣
         self._close_df = build_close_df(self.aligned_data)
-        
+
         # 計算指標
-        print("📊 計算衍生指標...")
+        logger.info('[INDICATOR] 計算衍生指標...')
         self.sharpe_matrix, self.ranking_matrix, self.growth_matrix = calculate_all_indicators(self.aligned_data)
-        print(f"✅ 指標計算完成")
-        
+        logger.info('[INDICATOR] 計算完成')
+
         # 載入匯率
-        print("💱 載入匯率資料...")
+        logger.info('[FX] 載入匯率資料...')
         self.fx = FX(use_cache=True)
-        print(f"✅ {self.fx}")
-        
+        logger.info('[FX] %s', self.fx)
+
         self.initialized = True
     
     def refresh(self):
@@ -342,6 +350,28 @@ class DataContainer:
             df = df[df.index <= end_date]
         
         return df
+
+    # ===== 市場資料委派方法（透過 market_loader） =====
+
+    def get_market_data(self, period: str, aligned_data: dict = None) -> dict:
+        """取得市場看板資料（NASDAQ/TWII/黃金/BTC/債券 K 線）"""
+        return self.market_loader.get_all_market_data(
+            period, aligned_data or self.aligned_data
+        )
+
+    def get_kline(self, symbol: str, period: str, aligned_data: dict = None) -> list:
+        """取得單一標的 K 線資料"""
+        return self.market_loader.get_weighted_kline(
+            symbol, period, aligned_data or self.aligned_data
+        )
+
+    def get_exchange_rate(self) -> float:
+        """取得當前美元兌台幣匯率"""
+        return self.market_loader.get_exchange_rate()
+
+    def get_exchange_rate_history(self, period: str) -> dict:
+        """取得歷史匯率資料"""
+        return self.market_loader.get_exchange_rate_history(period)
 
 
 # =============================================================================

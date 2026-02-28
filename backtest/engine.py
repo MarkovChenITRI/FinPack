@@ -15,11 +15,18 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Union
 from enum import Enum
 
-from core.config import FEES, NON_TRADABLE_INDUSTRIES
+from core.config import NON_TRADABLE_INDUSTRIES
 from core.indicator import Indicators
 from core.currency import Money, Currency, twd, usd, FX
 
 logger = logging.getLogger(__name__)
+
+
+# config 傳入 engine 時的必填欄位（由 load_config 保證都存在）
+REQUIRED_CONFIG_KEYS = frozenset({
+    'initial_capital', 'amount_per_stock', 'max_positions', 'market',
+    'rebalance_freq', 'buy_conditions', 'sell_conditions', 'rebalance_strategy', 'fees'
+})
 
 
 class TradeType(Enum):
@@ -144,6 +151,9 @@ class BacktestEngine:
         """
         if config is None:
             raise ValueError("config 參數必填，請從 run.py 傳入回測配置")
+        missing = REQUIRED_CONFIG_KEYS - set(config.keys())
+        if missing:
+            raise ValueError(f"engine config 缺少必填欄位: {sorted(missing)}")
         
         self.close = close_df
         self.indicators = indicators
@@ -227,7 +237,7 @@ class BacktestEngine:
     
     def _is_rebalance_day(self, idx: int) -> bool:
         """判斷是否為再平衡日"""
-        freq = self.config.get('rebalance_freq', 'weekly')
+        freq = self.config['rebalance_freq']
         if freq == 'daily':
             return True
         elif freq == 'weekly':
@@ -262,7 +272,7 @@ class BacktestEngine:
         
         # 產業分散（與前端 sort_industry.js 邏輯一致）
         if buy_cond.get('sort_industry', {}).get('enabled'):
-            per_industry = buy_cond['sort_industry'].get('per_industry', 2)
+            per_industry = buy_cond['sort_industry']['per_industry']
             
             # 按產業分組
             industry_groups = {}
@@ -320,31 +330,31 @@ class BacktestEngine:
         country = self.stock_info.get(symbol, {}).get('country', 'US')
         
         if buy_cond.get('sharpe_rank', {}).get('enabled'):
-            top_n = buy_cond['sharpe_rank'].get('top_n', 15)
+            top_n = buy_cond['sharpe_rank']['top_n']
             if not self.indicators.check_in_sharpe_top_k(symbol, date_str, country, top_n):
                 return False
-        
+
         if buy_cond.get('sharpe_threshold', {}).get('enabled'):
-            threshold = buy_cond['sharpe_threshold'].get('threshold', 0.5)
+            threshold = buy_cond['sharpe_threshold']['threshold']
             sharpe = self.indicators.get_sharpe(symbol, idx)
             if pd.isna(sharpe) or sharpe < threshold:
                 return False
-        
+
         if buy_cond.get('sharpe_streak', {}).get('enabled'):
-            days = buy_cond['sharpe_streak'].get('days', 3)
-            top_n = buy_cond['sharpe_streak'].get('top_n', 15)  # 使用自己的 top_n（與 JS 一致）
+            days = buy_cond['sharpe_streak']['days']
+            top_n = buy_cond['sharpe_streak']['top_n']
             if not self.indicators.check_sharpe_streak(symbol, idx, days, top_n):
                 return False
-        
+
         if buy_cond.get('growth_streak', {}).get('enabled'):
-            days = buy_cond['growth_streak'].get('days', 3)
-            percentile = buy_cond['growth_streak'].get('percentile', 50)
+            days = buy_cond['growth_streak']['days']
+            percentile = buy_cond['growth_streak']['percentile']
             if not self.indicators.check_growth_streak(symbol, idx, days, percentile):
                 return False
-        
+
         # growth_rank: 檢查股票是否在 Growth 排名前 N 名（與 JS growth_rank.js 一致）
         if buy_cond.get('growth_rank', {}).get('enabled'):
-            top_n = buy_cond['growth_rank'].get('top_n', 15)
+            top_n = buy_cond['growth_rank']['top_n']
             if not self.indicators.check_in_growth_top_k(symbol, date_str, country, top_n):
                 return False
         
@@ -372,8 +382,8 @@ class BacktestEngine:
         
         # Sharpe 失敗
         if sell_cond.get('sharpe_fail', {}).get('enabled'):
-            periods = sell_cond['sharpe_fail'].get('periods', 3)
-            top_n = sell_cond['sharpe_fail'].get('top_n', 15)
+            periods = sell_cond['sharpe_fail']['periods']
+            top_n = sell_cond['sharpe_fail']['top_n']
             in_top_k = self.indicators.check_in_sharpe_top_k(symbol, date_str, country, top_n)
             if not in_top_k:
                 self._sharpe_fail_counter[symbol] = self._sharpe_fail_counter.get(symbol, 0) + 1
@@ -381,11 +391,11 @@ class BacktestEngine:
                 self._sharpe_fail_counter[symbol] = 0
             if self._sharpe_fail_counter.get(symbol, 0) >= periods:
                 return f'sharpe_fail({periods})'
-        
+
         # Growth 失敗（與 JS growth_fail.js 一致：計算最近 N 天 Growth 平均值）
         if sell_cond.get('growth_fail', {}).get('enabled'):
-            days = sell_cond['growth_fail'].get('days', 5)
-            threshold = sell_cond['growth_fail'].get('threshold', 0)
+            days = sell_cond['growth_fail']['days']
+            threshold = sell_cond['growth_fail']['threshold']
             
             # 計算最近 days 天的 Growth 平均值
             growth_values = []
@@ -403,7 +413,7 @@ class BacktestEngine:
         
         # 未被選中
         if sell_cond.get('not_selected', {}).get('enabled'):
-            periods = sell_cond['not_selected'].get('periods', 3)
+            periods = sell_cond['not_selected']['periods']
             if symbol not in selected:
                 self._not_selected_counter[symbol] = self._not_selected_counter.get(symbol, 0) + 1
             else:
@@ -413,8 +423,8 @@ class BacktestEngine:
         
         # 回撤
         if sell_cond.get('drawdown', {}).get('enabled'):
-            threshold = sell_cond['drawdown'].get('threshold', 0.40)
-            from_highest = sell_cond['drawdown'].get('from_highest', False)  # 預設從買入價計算
+            threshold = sell_cond['drawdown']['threshold']
+            from_highest = sell_cond['drawdown']['from_highest']
             price = self.close.iloc[idx].get(symbol, pos.buy_price.amount)
             
             # 根據設定決定基準價（使用原始幣別的數值）
@@ -428,8 +438,8 @@ class BacktestEngine:
         
         # 弱勢（與 JS weakness.js 一致：Sharpe rank > K AND Growth rank > K 連續 M 期）
         if sell_cond.get('weakness', {}).get('enabled'):
-            rank_k = sell_cond['weakness'].get('rank_k', 20)
-            periods = sell_cond['weakness'].get('periods', 3)
+            rank_k = sell_cond['weakness']['rank_k']
+            periods = sell_cond['weakness']['periods']
             
             # 取得 Sharpe 和 Growth 排名位置
             sharpe_pos = self.indicators.get_sharpe_rank_position(symbol, date_str, country)
@@ -456,7 +466,7 @@ class BacktestEngine:
         所有金額使用 Money 類型，確保幣別安全。
         """
         strategy = self.config['rebalance_strategy']
-        stype = strategy.get('type', 'batch')
+        stype = strategy['type']
         candidates = self._select_stocks(idx)
         
         # 找出需要買入的（在候選中但未持有）
@@ -476,7 +486,7 @@ class BacktestEngine:
         
         if stype == 'batch':
             # 分批投入：用現金的固定比例買入（Money / n = Money）
-            ratio = strategy.get('batch_ratio', 0.20)
+            ratio = strategy['batch_ratio']
             invest_amount: Money = self.cash * ratio
             amount_per_stock: Money = invest_amount / len(to_buy) if to_buy else twd(0)
             self._buy_stocks(to_buy, idx, date_str, amount_per_stock)
@@ -488,9 +498,9 @@ class BacktestEngine:
             
         elif stype == 'concentrated':
             # 集中投資：只在前 K 名有明確領先時才買入（與 JS concentrated.js 一致）
-            top_k = strategy.get('concentrate_top_k', 3)
-            lead_margin = strategy.get('lead_margin', 0.3)  # 領先差距門檻
-            market = self.config.get('market', 'us')
+            top_k = strategy['concentrate_top_k']
+            lead_margin = strategy['lead_margin']
+            market = self.config['market']
             
             # 取得 Top-K 和 Next-K (K+1~2K) 股票的 Sharpe 平均值
             top_k_tickers = []
@@ -539,12 +549,12 @@ class BacktestEngine:
         elif stype == 'delayed':
             # 延遲投入：等市場轉強再進場（與 JS delayed.js 一致）
             # 計算 Sharpe Top-N 的平均值，只有平均 > 門檻時才買入
-            top_n = strategy.get('top_n', 5)
-            sharpe_threshold = strategy.get('sharpe_threshold', 0)
-            
+            top_n = strategy['top_n']
+            sharpe_threshold = strategy['sharpe_threshold']
+
             # 取得當日 Sharpe Top-N 股票
             top_sharpe_values = []
-            market = self.config.get('market', 'us')
+            market = self.config['market']
             
             if market in ('global', 'us'):
                 us_ranking = self.indicators.sharpe_rank_by_country.get(date_str, {}).get('US', [])
@@ -634,10 +644,11 @@ class BacktestEngine:
                 amount_twd = amount_original
             
             # 計算手續費（TWD）
-            fee_cfg = FEES.get('us' if is_us else 'tw', FEES['us'])
+            _fees = self.config['fees']
+            fee_cfg = _fees['us' if is_us else 'tw']
             fee_value = max(amount_twd.amount * fee_cfg['rate'], fee_cfg['min_fee'])
             fee = twd(fee_value)
-            
+
             # 總成本（TWD）
             total_cost = amount_twd + fee
             
@@ -698,10 +709,11 @@ class BacktestEngine:
             amount_twd = amount_original
         
         # 計算手續費（TWD）
-        fee_cfg = FEES.get('us' if is_us else 'tw', FEES['us'])
+        _fees = self.config['fees']
+        fee_cfg = _fees['us' if is_us else 'tw']
         fee_value = max(amount_twd.amount * fee_cfg['rate'], fee_cfg['min_fee'])
         fee = twd(fee_value)
-        
+
         # 計算損益（TWD）
         cost_basis = pos.cost_basis  # Money (TWD)
         profit = amount_twd - cost_basis - fee
