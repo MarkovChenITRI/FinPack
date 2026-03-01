@@ -18,6 +18,7 @@ import argparse
 from core.currency import twd, usd
 
 from backtest import format_backtest_report
+from backtest.report import format_backtest_line_message
 from backtest.config import load_config
 from backtest.runner import run_backtest
 
@@ -87,8 +88,18 @@ def run_backtest_cli(use_cache: bool = False) -> str:
         })
 
     current_holdings.sort(key=lambda x: x['buy_date'], reverse=True)
+    
+    # 4. LINE 訊息（印出供外部程式擷取或傳送）
+    line_msg, has_recent_trades = format_backtest_line_message(
+        result=result,
+        current_holdings=current_holdings,
+        start_dt=ctx['start_dt'],
+        end_dt=end_dt,
+    )
+    print(line_msg)
+    print(f'has_recent_trades: {has_recent_trades}')
 
-    # 4. 格式化文字輸出（CLI 報告）
+    # 5. 格式化完整文字報告（CLI 輸出）
     return format_backtest_report(
         result=result,
         cash=engine.cash,                           # Money (TWD)

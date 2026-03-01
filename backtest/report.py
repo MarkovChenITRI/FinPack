@@ -5,9 +5,12 @@
 支援 Money 類型的金額處理。
 """
 import io
+import logging
 from typing import List, Dict, Any, Union
 
 from core.currency import Money
+
+logger = logging.getLogger(__name__)
 
 
 def _get_amount(value: Union[Money, float, int]) -> float:
@@ -91,7 +94,11 @@ def format_backtest_report(
     _format_trades(output, result.trades)
     
     output.write("=" * 60 + "\n")
-    return output.getvalue()
+
+    report_str = output.getvalue()
+    logger.info('\n%s', report_str)
+
+    return report_str
 
 
 def _format_holdings(output: io.StringIO, current_holdings: List[Dict]):
@@ -185,6 +192,78 @@ def format_holdings_summary(holdings: List[Dict]) -> str:
         summary += ")"
     
     return summary
+
+
+def format_backtest_line_message(
+    result: Any,
+    current_holdings: List[Dict],
+    start_dt: Any,
+    end_dt: Any,
+) -> str:
+    """
+    格式化 LINE 訊息（適合手機閱讀的精簡版本）
+
+    包含：回測期間、六大績效、近三日買賣訊號、目前持股清單
+
+    Args:
+        result: BacktestResult 實例
+        current_holdings: 當前持倉列表
+        start_dt: 回測開始日期
+        end_dt: 回測結束日期
+
+    Returns:
+        tuple[str, bool]: (LINE 訊息字串, 近三日是否有交易訊號)
+    """
+    from datetime import timedelta
+
+    summary = result.to_dict()
+    SEP = '─' * 22
+
+    lines = []
+
+    # ── 標題 ──────────────────────────────────────────────
+    lines.append(f'📊 {end_dt.strftime("%Y-%m-%d")} 每日建議')
+    lines.append(f'設立日：{start_dt.strftime("%Y-%m-%d")}')
+    lines.append(SEP)
+
+    # ── 六大績效 ──────────────────────────────────────────
+    lines.append('【系統績效】')
+    lines.append(f'總報酬  {summary["total_return"]}')
+    lines.append(f'年化    {summary["annualized_return"]}')
+    lines.append(f'最大回撤 {summary["max_drawdown"]}')
+    lines.append(f'Sharpe  {summary["sharpe_ratio"]}')
+    lines.append(f'勝率    {summary["win_rate"]}')
+    lines.append(f'交易    {summary["total_trades"]} 筆')
+    lines.append(SEP)
+
+    # ── 近三日買賣訊號 ────────────────────────────────────
+    lines.append('【交易訊號 (近三日)】')
+    cutoff = (end_dt - timedelta(days=3)).strftime('%Y-%m-%d')
+    recent = [t for t in result.trades if t['date'] >= cutoff]
+    has_recent_trades = bool(recent)
+    if recent:
+        for t in recent:
+            icon = '🟢' if t['type'] == 'buy' else '🔴'
+            action = '買入' if t['type'] == 'buy' else '賣出'
+            date_short = t['date'][5:]   # MM-DD
+            lines.append(f'{icon} {date_short} {action} {t["symbol"]}')
+    else:
+        lines.append('（無訊號）')
+    lines.append(SEP)
+
+    # ── 目前持股 ──────────────────────────────────────────
+    lines.append('現有倉位')
+    if current_holdings:
+        sorted_holdings = sorted(current_holdings, key=lambda h: h['pnl_pct'], reverse=True)
+        for h in sorted_holdings:
+            pnl = h['pnl_pct']  # 小數，如 0.052
+            pnl_str = f'{pnl:+.1%}'
+            country_flag = '🇹🇼' if h.get('country') == 'TW' else '🇺🇸'
+            lines.append(f'{country_flag} {h["symbol"]:<8} {pnl_str}')
+    else:
+        lines.append('（無持倉）')
+
+    return '\n'.join(lines), has_recent_trades
 
 
 def format_performance_summary(result: Any) -> str:

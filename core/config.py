@@ -38,7 +38,7 @@ MARKET_CACHE_MAX_AGE_HOURS = 6      # 市場資料快取時效（小時）
 # TradingView API 設定（可透過環境變數覆蓋）
 # =============================================================================
 TRADINGVIEW_WATCHLIST_ID = os.environ.get('TRADINGVIEW_WATCHLIST_ID', '118349730')
-TRADINGVIEW_SESSION_ID = os.environ.get('TRADINGVIEW_SESSION_ID', 'b379eetq1pojcel6olyymmpo1rd41nng')
+TRADINGVIEW_SESSION_ID = os.environ.get('TRADINGVIEW_SESSION_ID', 'm46y1452r9757tr6joce9qonjrnl88ia')
 
 # =============================================================================
 # 資料篩選

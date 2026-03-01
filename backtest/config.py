@@ -149,7 +149,7 @@ DEFAULT_CONFIG = {
     'amount_per_stock': 100_000,
     'max_positions': 10,
     'market': 'us',
-    'start_date': '2024-01-01',
+    'start_date': '2025-09-29',
     'end_date': None,
     'rebalance_freq': 'weekly',
     'fees': {
