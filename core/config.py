@@ -1,9 +1,8 @@
 """
-FinPack 統一配置模組
+FinPackV2 統一配置模組（BTC-USD SMC 版）
 
-集中管理所有配置參數，供 main.py 與 run.py 共用
+集中管理路徑、快取、計算參數。
 """
-import os
 import sys
 from pathlib import Path
 
@@ -11,47 +10,28 @@ from pathlib import Path
 # 路徑設定
 # =============================================================================
 if getattr(sys, 'frozen', False):
-    # PyInstaller 打包後：使用 exe 所在目錄
     BASE_DIR = Path(sys.executable).parent
 else:
-    # 開發模式：使用原始碼目錄（core/ 的父目錄）
     BASE_DIR = Path(__file__).parent.parent
 
-CACHE_DIR = BASE_DIR / "cache"
-STOCK_CACHE_FILE = CACHE_DIR / "stock_data.pkl"
-MARKET_CACHE_FILE = CACHE_DIR / "market_data.pkl"
-
-# =============================================================================
-# 計算參數
-# =============================================================================
-SHARPE_WINDOW = 252         # Sharpe 計算視窗（天）
-RISK_FREE_RATE = 0.04       # 無風險利率（年化）
-DATA_PERIOD = '6y'          # 股票資料抓取期間
+CACHE_DIR       = BASE_DIR / "cache"
+BTC_CACHE_FILE  = CACHE_DIR / "btc_1d.pkl"   # 預設快取（其他 timeframe 動態命名）
 
 # =============================================================================
 # 快取策略
 # =============================================================================
-CACHE_MAX_STALENESS_DAYS = 1        # 允許的最大過期天數
-MARKET_CACHE_MAX_AGE_HOURS = 6      # 市場資料快取時效（小時）
+CACHE_MAX_STALENESS_DAYS  = 1   # 日線：最多允許 1 天過期
+CACHE_MAX_STALENESS_HOURS = 4   # 小時線：最多允許 4 小時過期
 
 # =============================================================================
-# TradingView API 設定（可透過環境變數覆蓋）
+# 資料參數
 # =============================================================================
-TRADINGVIEW_WATCHLIST_ID = os.environ.get('TRADINGVIEW_WATCHLIST_ID', '118349730')
-TRADINGVIEW_SESSION_ID = os.environ.get('TRADINGVIEW_SESSION_ID', 'm46y1452r9757tr6joce9qonjrnl88ia')
+BTC_SYMBOL   = 'BTC-USD'
+DATA_PERIOD  = '6y'         # 日線預設抓取期間
 
 # =============================================================================
-# 資料篩選
-# =============================================================================
-NON_TRADABLE_INDUSTRIES = frozenset({'Market Index', 'Index'})
-MIN_STOCKS_FOR_VALID_DAY = 50           # 有效交易日最少股票數（絕對值）
-MIN_STOCKS_FOR_VALID_DAY_RATIO = 0.5    # 有效交易日最少股票比例
-MIN_HISTORY_DAYS = 100                   # 股票最少需要的歷史資料天數
-
-# =============================================================================
-# 手續費設定
+# 手續費（加密貨幣現貨）
 # =============================================================================
 FEES = {
-    'us': {'rate': 0.003, 'min_fee': 15},
-    'tw': {'rate': 0.006, 'min_fee': 0}
+    'crypto': {'rate': 0.001, 'min_fee': 0.0},   # 0.1%，無最低手續費
 }

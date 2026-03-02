@@ -1,19 +1,21 @@
 """
-回測執行 pipeline（CLI 和 API 共用）
+回測執行 pipeline（股票多資產策略參考模板）
 
-供 run.py 和 web/routes/backtest.py 呼叫。
-依賴：core.container（全域 singleton）
+NOTE: 此模組為股票多資產策略的 pipeline，依賴已移除的股票系統模組。
+BTC SMC 策略直接在 run_btc.py 中呼叫 SmcEngine，不使用此 runner。
+此檔案保留作為架構設計參考（資料準備、日期解析、pipeline 模式）。
 """
 import logging
 import pandas as pd
 from datetime import datetime
 from typing import Tuple
 
-from core import container, build_close_df, filter_by_market, Indicators
-from core.currency import twd, FX
-from backtest.engine import BacktestEngine
-from backtest.benchmark import calculate_benchmark_curve
-from backtest.log_utils import log_backtest_input, log_backtest_result
+try:
+    from backtest.engine import BacktestEngine
+    from backtest.benchmark import calculate_benchmark_curve
+    from backtest.log_utils import log_backtest_input, log_backtest_result
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 

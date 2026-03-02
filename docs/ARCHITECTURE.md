@@ -1,188 +1,128 @@
-# FinPack 架構設計 v3（Python 後端計算版）
+# FinPackV2 架構文件 — BTC-USD SMC 合約回測平台
 
-> 最後更新：2026-02
+## 技術棧
 
----
-
-## 設計理念
-
-**後端計算**：回測邏輯完全在 Python 後端執行，前端（JavaScript）僅負責 UI 呈現與參數設定。
-
-**貨幣安全**：所有金額使用 `Money` 類型強制幣別（TWD/USD）檢查，避免混用錯誤。
-
-**匯率自動處理**：`FX` 類別提供日期對應匯率，美股交易時自動轉換。
-
-**模組完全獨立**：`core` / `backtest` / `web` 三層零互相依賴，只有 `run.py` 和 `main.py` 作為組裝層。
+| 層次 | 技術 |
+|------|------|
+| 後端框架 | Flask (Python) |
+| 資料來源 | yfinance (BTC-USD, 1D/4H/1H) |
+| 指標計算 | NumPy/Pandas（原生，無 TA 函式庫） |
+| 前端圖表 | Lightweight Charts (TradingView) |
+| 前端框架 | Vanilla JS（ES modules） |
+| 打包支援 | PyInstaller（`sys._MEIPASS` 路徑處理） |
 
 ---
 
 ## 目錄結構
 
 ```
-FinPack/
+FinPackV2/
+├── main.py                    # Flask 應用工廠 + 啟動入口
+├── run_btc.py                 # CLI 回測入口（非 web）
+├── log_setup.py               # 日誌配置
 │
-├── core/                       # 模組 A：資料層（完全獨立）
-│   ├── __init__.py             # 匯出 container, build_close_df, filter_by_market, Indicators, Money, twd, usd, FX
-│   ├── config.py               # 系統常數（路徑、計算參數、手續費）
-│   ├── currency.py             # Money, twd, usd, FX（匯率）
-│   ├── data.py                 # 資料抓取與 pickle 快取
-│   ├── align.py                # align_data_with_bfill（日期對齊）
-│   ├── indicator.py            # Indicators 類別（Sharpe/排名/Growth）
-│   └── container.py            # DataContainer singleton + build_close_df + filter_by_market
+├── core/
+│   ├── __init__.py            # 公開 API 匯出
+│   ├── config.py              # 常數：路徑、快取設定
+│   ├── data.py                # yfinance 抓取、4H 重採樣、快取
+│   ├── smc.py                 # SMC 指標：Pivot/BOS/CHOCH/FVG/OB/LP
+│   ├── smc_service.py         # 啟動時預計算 + JSON 序列化
+│   ├── container.py           # BtcDataContainer singleton
+│   └── currency.py            # Money 型別（USD 計算參考）
 │
-├── backtest/                   # 模組 B：回測引擎（完全獨立）
-│   ├── __init__.py             # 匯出 BacktestEngine, BacktestResult, Trade, Position, TradeType, format_backtest_report
-│   ├── config.py               # DEFAULT_CONFIG, CONDITION_OPTIONS, merge_config（唯一真相來源）
-│   ├── engine.py               # BacktestEngine（買賣執行、權益追蹤）
-│   └── report.py               # format_backtest_report（CLI 報告格式化）
+├── backtest/
+│   ├── __init__.py            # 匯出 SMC 回測模組
+│   ├── smc_config.py          # SMC 配置驗證（含 leverage）
+│   ├── smc_engine.py          # SMC 回測引擎（含強平邏輯）
+│   ├── engine.py              # [參考] 多資產股票回測模板
+│   ├── runner.py              # [參考] pipeline 架構模板
+│   ├── config.py              # [參考] 條件配置系統模板
+│   ├── report.py              # [參考] 報告格式化模板
+│   └── benchmark.py           # [參考] 基準比較模板
 │
-├── web/                        # 模組 C：Flask Web 框架（完全獨立）
-│   ├── __init__.py             # 匯出 MarketDataLoader
-│   ├── market.py               # MarketDataLoader（市場指數、匯率快取）
+├── web/
+│   ├── __init__.py
+│   ├── market.py              # （空，保留 import 相容）
 │   └── routes/
-│       ├── __init__.py         # 匯出 stock_bp, market_bp, backtest_bp
-│       ├── stock.py            # /api/stocks, /api/industry/data
-│       ├── market.py           # /api/market-data, /api/kline, /api/exchange-rate
-│       └── backtest.py         # /api/backtest/run, /api/backtest/config
+│       ├── __init__.py        # 匯出 market_bp, backtest_bp
+│       ├── market.py          # /api/kline/btc, /api/market-status, /api/btc/signals
+│       └── backtest.py        # /api/backtest/run, /api/backtest/config
 │
-├── run.py                      # CLI 入口（組裝 core + backtest）
-├── main.py                     # Web 入口（組裝 core + backtest + web）
+├── templates/
+│   └── index.html             # BTC SMC 單頁應用
 │
-├── static/                     # 前端靜態資產（CSS / JS）
-├── templates/                  # HTML 模板（index.html）
-├── cache/                      # pickle 快取目錄
-│   ├── stock_data.pkl
-│   └── market_data.pkl
-├── tests/                      # 單元測試
-└── docs/                       # 本文件目錄
-    └── backup/                 # 舊版文件備份（v2 JS 架構）
+├── static/
+│   ├── css/style.css          # 深色主題 CSS
+│   └── js/
+│       ├── app.js             # 主協調器
+│       ├── config.js          # API 端點常數
+│       ├── api/
+│       │   ├── client.js      # fetch 封裝
+│       │   ├── btc.js         # BTC K線 + 信號 API
+│       │   └── backtest.js    # 回測 API
+│       ├── components/
+│       │   ├── SmcChart.js    # K線圖 + SMC overlay
+│       │   └── ContractPanel.js # 合約設定 + 回測結果
+│       └── utils/
+│           └── formatter.js   # 數字/日期格式化
+│
+├── cache/                     # 資料快取（.pkl 檔案）
+├── logs/                      # 日誌檔案
+└── docs/
+    ├── ARCHITECTURE.md        # 本文件
+    ├── system_design.md       # 完整系統設計規格
+    ├── smart_money_evaluation.md # SMC 量化可行性評估
+    └── backup/                # 舊版股票系統文件備份
 ```
 
 ---
 
-## 模組依賴圖
+## 資料流
 
 ```
-     ┌─────────┐     ┌───────────┐     ┌─────────┐
-     │  core/  │     │ backtest/ │     │  web/   │
-     │(資料層) │     │ (引擎層)  │     │(路由層) │
-     └────┬────┘     └─────┬─────┘     └────┬────┘
-          │                │                │
-          │    無互相依賴   │                │
-          └────────┬───────┴────────┬───────┘
-                   │                │
-                   ▼                ▼
-            ┌────────────┐   ┌────────────┐
-            │   run.py   │   │  main.py   │
-            │   (CLI)    │   │   (Web)    │
-            │ core+back  │   │core+back+web│
-            └────────────┘   └────────────┘
+[yfinance API]
+     │ fetch (1D/1H)
+     ▼
+[core/data.py] ──快取──▶ [cache/btc_*.pkl]
+     │
+     ▼
+[BtcDataContainer]   ← container.load('1d') at startup
+     │
+     ├──▶ [SmcSignalService]  ← pre-compute at startup
+     │         │ pivot/BOS/CHOCH/FVG/OB/LP
+     │         ▼
+     │    [JSON in memory]
+     │
+     └──▶ [SmcEngine]  ← on demand (backtest/run)
+               │ bar-by-bar simulation
+               ▼
+          [SmcBacktestResult]
 ```
-
-**禁止的依賴關係**：
-- `core/` 不得引用 `backtest/` 或 `web/`
-- `backtest/` 不得引用 `web/`
-- 三模組之間不得互相直接呼叫
 
 ---
 
-## 層級職責
+## 啟動序列
 
-### 一、core/（資料層）
-
-| 檔案 | 職責 |
-|------|------|
-| `config.py` | 全域常數（路徑、Sharpe 視窗、無風險利率、手續費） |
-| `currency.py` | `Money` 幣別安全類型、`FX` 匯率查詢 |
-| `data.py` | yfinance/TradingView 資料抓取、pickle 快取讀寫 |
-| `align.py` | 多股票日期對齊（前向填充） |
-| `indicator.py` | Sharpe Ratio、排名矩陣、Growth 矩陣計算 |
-| `container.py` | `DataContainer` singleton（統一資料存取介面）、`build_close_df()`、`filter_by_market()` |
-
-### 二、backtest/（回測引擎層）
-
-| 檔案 | 職責 |
-|------|------|
-| `config.py` | 條件選項（`CONDITION_OPTIONS`）、預設參數（`DEFAULT_CONFIG`）、`merge_config()` |
-| `engine.py` | `BacktestEngine`：逐日買賣執行、持倉管理、績效計算 |
-| `report.py` | `format_backtest_report()`：CLI 文字報告格式化 |
-
-### 三、web/（路由層）
-
-| 檔案 | 職責 |
-|------|------|
-| `market.py` | `MarketDataLoader`：市場指數 K 線快取（yfinance） |
-| `routes/stock.py` | 股票清單、產業分析 API |
-| `routes/market.py` | 市場看板、K 線、匯率 API |
-| `routes/backtest.py` | 回測執行 API |
+```python
+# main.py create_app()
+1. container.load('1d')           # 載入 BTC-USD 1D 日線
+2. smc_service.precompute()       # 預計算各 timeframe SMC 信號
+3. register blueprints            # 掛載 API 路由
+4. serve static files             # 前端靜態服務
+```
 
 ---
 
-## 入口點
+## 前端初始化序列
 
-### main.py（Web 服務）
-
-```python
-# create_app() 工廠函數職責：
-# 1. get_resource_path()          → 支援 PyInstaller 打包路徑
-# 2. Flask(__name__, ...)         → 初始化 Flask
-# 3. container（模組級 singleton）→ import 時自動初始化
-# 4. register_blueprints()        → 掛載三個 Blueprint 至 /api
-# 5. GET /                        → templates/index.html
-# 6. GET /<path>                  → static/ 靜態資產
-# 7. GET /api/health              → 健康檢查
-
-python main.py
-# 預設 http://localhost:5000
-# 環境變數：PORT（埠號）、FLASK_DEBUG（除錯模式）
-```
-
-### run.py（CLI 回測）
-
-```python
-# FRONTEND_DEFAULTS：繼承 backtest/config.py 的 DEFAULT_CONFIG
-# 並將 initial_capital / amount_per_stock 包裝為 twd(...)
-
-# run_backtest(use_cache) 處理流程：
-# 1. container（共用 singleton）在 import 時已自動初始化
-# 2. build_close_df(container.aligned_data)         → 收盤價矩陣 [Date × Symbol]
-# 3. filter_by_market(close_df, stock_info, market)  → 依市場過濾
-# 4. Indicators(close_df, stock_info)               → 計算 sharpe / rank / growth
-# 5. BacktestEngine(close_df, indicators, stock_info, config, fx)
-# 6. engine.run(start_date, end_date)               → BacktestResult
-# 7. format_backtest_report(...)                    → 輸出至終端
-
-python run.py --debug   # --debug 使用快取資料（不重新抓取）
-```
-
-> **重要**：`run.py` 與 `main.py` 的回測處理流程完全一致，共用同一個 `container`、`build_close_df`、`filter_by_market`、`Indicators`、`BacktestEngine`，確保 CLI 與 Web API 結果相同。
-
----
-
-## 貨幣系統
-
-### Money 類型
-
-```python
-from core.currency import twd, usd, Money
-
-initial = twd(1_000_000)   # $1,000,000 TWD
-price   = usd(150.50)      # $150.50 USD
-
-total = twd(100) + twd(200)   # OK
-# mixed = twd(100) + usd(50)  # → CurrencyMismatchError（幣別不符）
-```
-
-### FX 匯率轉換
-
-```python
-from core.currency import FX, usd, twd
-
-fx = FX(use_cache=True)
-
-rate   = fx.rate('2025-01-15')                    # float，約 32.5
-amount = fx.to_twd(usd(1000), '2025-01-15')       # twd(32500)
-budget = fx.to_usd(twd(100_000), '2025-01-15')    # usd(3076.92)
+```javascript
+// app.js init()
+1. GET /api/market-status            → 更新即時價格
+2. GET /api/kline/btc?timeframe=1d   → K線資料
+3. GET /api/btc/signals?timeframe=1d → SMC 信號
+4. SmcChart.init(klineData)          → 渲染 K 線
+5. SmcChart.applySignals(signals)    → 疊加信號 overlay
+6. ContractPanel.init()              → 綁定回測表單
 ```
 
 ---
@@ -191,56 +131,19 @@ budget = fx.to_usd(twd(100_000), '2025-01-15')    # usd(3076.92)
 
 | 方法 | 路由 | 說明 |
 |------|------|------|
-| GET | `/api/health` | 健康檢查 |
-| GET | `/api/stocks` | 股票清單 |
-| GET | `/api/industry/data` | 產業 Sharpe/Growth 分析 |
-| GET | `/api/market-data` | 市場看板（NASDAQ/TWII/黃金/BTC 等）⚠️ |
-| GET | `/api/kline/<symbol>` | 單一標的 K 線 ⚠️ |
-| GET | `/api/exchange-rate` | 美元兌台幣匯率 ⚠️ |
-| GET | `/api/market-status` | 最新資料日期狀態 ⚠️ |
-| GET | `/api/date-info/<date>` | 指定日期市場資訊 ⚠️ |
-| GET | `/api/backtest/config` | 取得條件選項與預設值 |
-| POST | `/api/backtest/run` | 執行回測（benchmark 曲線部分失效 ⚠️）|
-
-> ⚠️ 標示的路由目前有已知問題，詳見 [known_issues.md](known_issues.md)
+| GET | `/api/health` | 健康檢查（BTC 初始化狀態） |
+| GET | `/api/kline/btc` | BTC K線資料（?timeframe=1d&period=1y） |
+| GET | `/api/market-status` | 最新 BTC 收盤價 |
+| GET | `/api/btc/signals` | SMC 信號 JSON（?timeframe=1d） |
+| GET | `/api/backtest/config` | 可用條件選項與預設值 |
+| POST | `/api/backtest/run` | 執行 SMC 合約回測 |
 
 ---
 
-## 配置說明
+## 關鍵設計原則
 
-### core/config.py（系統常數）
-
-| 參數 | 預設值 | 說明 |
-|------|--------|------|
-| `SHARPE_WINDOW` | 252 | Sharpe 滾動視窗（天） |
-| `RISK_FREE_RATE` | 0.04 | 年化無風險利率 |
-| `DATA_PERIOD` | `'6y'` | yfinance 抓取期間 |
-| `CACHE_MAX_STALENESS_DAYS` | 1 | 快取過期天數 |
-| `FEES['US']` | rate=0.003, min=$15 USD | 美股複委託手續費 |
-| `FEES['TW']` | rate=0.006 | 台股手續費（含證交稅） |
-
-### backtest/config.py（回測配置）
-
-條件選項與預設參數的**唯一真相來源**。詳見 [strategy_guide.md](strategy_guide.md)。
-
----
-
-## 已知問題
-
-詳見 [known_issues.md](known_issues.md)
-
-**摘要**：
-- `container.get_market_data()` / `get_kline()` / `get_exchange_rate()` 等方法不存在，市場看板 API 全部失效
-- `container.market_loader` 屬性未設定，benchmark 曲線計算失敗
-- `CONDITION_OPTIONS` / `DEFAULT_CONFIG` 在 `backtest/config.py` 與 `web/routes/backtest.py` 重複定義
-
----
-
-## 測試
-
-```bash
-python -m pytest tests/ -v
-python -m pytest tests/test_currency.py -v
-python -m pytest tests/test_engine_integration.py -v
-python -m pytest tests/test_batch_strategy.py -v
-```
+1. **無前瞻偏差**: Pivot 偵測使用右側 `lookback` 根確認，回測逐根模擬
+2. **強平安全驗證**: 強平價比止損更早觸發時，該筆交易跳過不進場
+3. **預計算效能**: SMC 信號在啟動時一次性計算完畢，API 回應即時
+4. **單資產設計**: 整個系統只針對 BTC-USD，無多股票邏輯
+5. **參考模板保留**: `backtest/engine.py` 等舊檔案作為架構參考，import 已防護

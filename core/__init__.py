@@ -1,39 +1,27 @@
 """
-FinPack 核心模組
+FinPackV2 核心模組（BTC-USD SMC 版）
 
-共用資料處理與指標計算功能，供 main.py 與 run.py 共同使用
+提供以下功能：
+- BTC-USD OHLCV 資料抓取與快取（data.py）
+- Smart Money Concepts 指標計算（smc.py）
+- 資料容器（container.py）
 """
 from .config import (
-    # 路徑
-    BASE_DIR, CACHE_DIR, STOCK_CACHE_FILE, MARKET_CACHE_FILE,
-    # 計算參數
-    SHARPE_WINDOW, RISK_FREE_RATE, DATA_PERIOD,
-    # 快取策略
-    CACHE_MAX_STALENESS_DAYS, MARKET_CACHE_MAX_AGE_HOURS,
-    # TradingView
-    TRADINGVIEW_WATCHLIST_ID, TRADINGVIEW_SESSION_ID,
-    # 資料篩選
-    NON_TRADABLE_INDUSTRIES, MIN_STOCKS_FOR_VALID_DAY, MIN_STOCKS_FOR_VALID_DAY_RATIO,
-    MIN_HISTORY_DAYS,
-    # 後端參數
-    FEES,
+    BASE_DIR, CACHE_DIR, BTC_CACHE_FILE,
+    CACHE_MAX_STALENESS_DAYS,
+    BTC_SYMBOL, DATA_PERIOD, FEES,
 )
 from .data import (
-    fetch_watchlist, fetch_stock_history, fetch_all_stock_data,
-    load_stock_cache, load_stock_cache_raw, save_stock_cache,
-    smart_load_or_fetch,
+    fetch_btc_ohlcv,
+    smart_load_btc,
+    save_btc_cache,
+    slice_ohlcv,
 )
-from .align import align_data_with_bfill, align_close_prices
-from .indicator import (
-    calculate_sharpe, calculate_ranking_matrix, calculate_growth_matrix,
-    calculate_all_indicators, compute_daily_ranks_by_country, Indicators,
+from .smc import (
+    SmcIndicators, SmcSignals,
+    FVG, OrderBlock, StructurePoint, LiquidityPool,
+    detect_pivots, detect_structure, detect_fvgs,
+    detect_order_blocks, detect_liquidity_pools,
 )
-from .currency import (
-    Money, Currency, CurrencyMismatchError,
-    twd, usd, FX,
-)
-from .container import (
-    DataContainer, container,
-    build_close_df, filter_by_market,
-)
-from .market import MarketDataLoader
+from .container import BtcDataContainer, container
+from .smc_service import SmcSignalService, smc_service

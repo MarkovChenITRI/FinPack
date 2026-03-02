@@ -1,341 +1,240 @@
 """
-資料抓取模組
+資料抓取模組（BTC-USD 版）
 
-負責從 TradingView 和 yfinance 抓取股票資料
-支援智慧快取策略：
-- DEBUG 模式：使用本地快取
-- 生產模式：直接從 API 擷取
+使用 yfinance 抓取 BTC-USD OHLCV 資料，支援多種時間框架。
+快取策略：pickle 本地快取，max 1 天過期。
 """
 import pickle
 import logging
-import requests
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
-from .config import (
-    CACHE_DIR, STOCK_CACHE_FILE,
-    TRADINGVIEW_WATCHLIST_ID, TRADINGVIEW_SESSION_ID,
-    DATA_PERIOD, NON_TRADABLE_INDUSTRIES, MIN_HISTORY_DAYS,
-    CACHE_MAX_STALENESS_DAYS
-)
+from .config import CACHE_DIR, BTC_CACHE_FILE, CACHE_MAX_STALENESS_DAYS
 
 logger = logging.getLogger(__name__)
 
+# 支援的時間框架 → yfinance interval 對應
+INTERVAL_MAP = {
+    '1d':  '1d',
+    '4h':  '1h',   # yfinance 無原生 4h，從 1h 重採樣
+    '1h':  '1h',
+}
+
+# yfinance 各 interval 可取得的最長歷史
+MAX_PERIOD = {
+    '1d': '10y',
+    '1h': '730d',
+}
+
 
 # =============================================================================
-# TradingView Watchlist 擷取
+# BTC-USD 資料抓取
 # =============================================================================
 
-def fetch_watchlist() -> Tuple[dict, dict]:
+def fetch_btc_ohlcv(
+    symbol: str = 'BTC-USD',
+    timeframe: str = '1d',
+    period: str = None,
+    start: str = None,
+    end: str = None,
+) -> pd.DataFrame:
     """
-    從 TradingView 取得投資組合清單
-    
+    抓取 BTC-USD OHLCV 資料
+
+    Args:
+        symbol:    yfinance 代碼（預設 'BTC-USD'）
+        timeframe: '1d' | '4h' | '1h'
+        period:    yfinance period 字串，例如 '2y'（與 start/end 二擇一）
+        start:     開始日期字串 'YYYY-MM-DD'
+        end:       結束日期字串 'YYYY-MM-DD'
+
     Returns:
-        (watchlist, stock_info)
-        watchlist: {industry: {provider: [codes]}}
-        stock_info: {ticker: {country, industry, provider, original_code}}
+        DataFrame: columns=[Open, High, Low, Close, Volume]，Index=DatetimeIndex
     """
-    url = f'https://in.tradingview.com/api/v1/symbols_list/custom/{TRADINGVIEW_WATCHLIST_ID}'
-    headers = {
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'cookie': f'sessionid={TRADINGVIEW_SESSION_ID}',
-        'x-requested-with': 'XMLHttpRequest',
-    }
-    
+    if timeframe not in INTERVAL_MAP:
+        raise ValueError(f'timeframe 必須是 {list(INTERVAL_MAP)} 之一，收到: {timeframe!r}')
+
+    yf_interval = INTERVAL_MAP[timeframe]
+    default_period = MAX_PERIOD.get(yf_interval, '2y')
+
     try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        symbols = response.json()["symbols"]
-    except Exception as e:
-        logger.warning(f"TradingView 無回應: {e}")
-        return {}, {}
-    
-    watchlist = {}
-    stock_info = {}
-    current_key = None
-    
-    for item in symbols:
-        if "###" in item:
-            current_key = item.strip("###\u2064")
-            watchlist[current_key] = {}
-        elif current_key:
-            if ':' not in item:
-                continue
-            provider, code = item.split(":", 1)
-            if provider not in watchlist[current_key]:
-                watchlist[current_key][provider] = []
-            
-            # 轉換為 yfinance 格式
-            if provider in ['NASDAQ', 'NYSE', 'AMEX']:
-                yf_code = code
-                country = 'US'
-            elif provider == 'TWSE':
-                yf_code = f"{code}.TW"
-                country = 'TW'
-            elif provider == 'TPEX':
-                yf_code = f"{code}.TWO"
-                country = 'TW'
-            else:
-                continue
-            
-            watchlist[current_key][provider].append(yf_code)
-            
-            stock_info[yf_code] = {
-                'country': country,
-                'industry': current_key,
-                'provider': provider,
-                'original_code': code
-            }
-    
-    return watchlist, stock_info
+        ticker = yf.Ticker(symbol)
+        if start:
+            df = ticker.history(interval=yf_interval, start=start, end=end)
+        else:
+            df = ticker.history(interval=yf_interval, period=period or default_period)
 
-
-# =============================================================================
-# 股票歷史資料擷取
-# =============================================================================
-
-def fetch_stock_history(ticker: str, period: str = DATA_PERIOD) -> pd.DataFrame:
-    """
-    下載單一股票歷史數據
-    
-    Returns:
-        DataFrame with columns: Open, High, Low, Close, Volume
-    """
-    try:
-        df = yf.Ticker(ticker).history(period=period, interval="1d")
         if df.empty:
+            logger.warning(f'yfinance 未返回 {symbol} 資料')
             return pd.DataFrame()
-        
-        df = df.tz_localize(None)
+
+        df = df.tz_localize(None) if df.index.tz is not None else df
         df = df.sort_index()
-        return df[['Open', 'High', 'Low', 'Close', 'Volume']]
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+
+        # 4h 重採樣
+        if timeframe == '4h':
+            df = _resample_to_4h(df)
+
+        logger.info(f'[DATA] {symbol} {timeframe}: {len(df)} 根 K 線 '
+                    f'({str(df.index[0])[:10]} ~ {str(df.index[-1])[:10]})')
+        return df
+
     except Exception as e:
-        logger.debug(f"{ticker}: {e}")
+        logger.error(f'抓取 {symbol} 失敗: {e}')
         return pd.DataFrame()
 
 
-def fetch_all_stock_data(show_progress: bool = True) -> Tuple[dict, dict, dict]:
-    """
-    抓取所有股票資料
-    
-    Args:
-        show_progress: 是否顯示進度（CLI 模式用）
-    
-    Returns:
-        (raw_data, watchlist, stock_info)
-    """
-    watchlist, stock_info = fetch_watchlist()
-    
-    if not watchlist:
-        logger.warning("無法取得 watchlist")
-        return {}, {}, {}
-    
-    raw_data = {}
-    all_tickers = list(stock_info.keys())
-    total = len(all_tickers)
-
-    log_fn = logger.info if show_progress else logger.debug
-    log_fn('[DATA] 共 %d 檔股票待抓取（%s）', total, DATA_PERIOD)
-
-    for i, ticker in enumerate(all_tickers):
-        industry = stock_info[ticker].get('industry', 'Unknown')
-        df = fetch_stock_history(ticker)
-
-        prefix = '[IDX]' if industry in NON_TRADABLE_INDUSTRIES else '[STK]'
-
-        if df.empty:
-            log_fn('%s [%3d/%d] %-15s (%s): 無資料，略過', prefix, i + 1, total, ticker, industry)
-            continue
-
-        if len(df) < MIN_HISTORY_DAYS:
-            logger.warning('%s [%3d/%d] %-15s (%s): 資料太少 (%d 筆)，略過',
-                           prefix, i + 1, total, ticker, industry, len(df))
-            continue
-
-        raw_data[ticker] = df
-        log_fn('%s [%3d/%d] %-15s (%s): %d 筆', prefix, i + 1, total, ticker, industry, len(df))
-
-    return raw_data, watchlist, stock_info
+def _resample_to_4h(df_1h: pd.DataFrame) -> pd.DataFrame:
+    """將 1H 資料重採樣為 4H"""
+    return df_1h.resample('4h').agg({
+        'Open':   'first',
+        'High':   'max',
+        'Low':    'min',
+        'Close':  'last',
+        'Volume': 'sum',
+    }).dropna(subset=['Open', 'Close'])
 
 
 # =============================================================================
-# 快取操作
+# 快取操作（與原有系統相同模式）
 # =============================================================================
 
-def _get_cache_data_date(raw_data: dict) -> Optional[datetime]:
-    """取得快取資料的最新日期"""
-    if not raw_data:
-        return None
-    sample_ticker = next(iter(raw_data))
-    sample_df = raw_data[sample_ticker]
-    if sample_df.empty:
-        return None
-    return sample_df.index[-1].date()
-
-
-def load_stock_cache_raw() -> Tuple[dict, dict, dict, Optional[datetime]]:
+def load_btc_cache(timeframe: str) -> Tuple[Optional[pd.DataFrame], Optional[datetime]]:
     """
-    讀取快取檔案（不判斷時效性，直接返回）
-    
+    載入 BTC 快取
+
     Returns:
-        (raw_data, watchlist, stock_info, last_update)
+        (df, last_update) 或 (None, None)
     """
-    if not STOCK_CACHE_FILE.exists():
-        return {}, {}, {}, None
-    
+    cache_file = _get_cache_path(timeframe)
+
+    if not cache_file.exists():
+        return None, None
+
     try:
-        with open(STOCK_CACHE_FILE, 'rb') as f:
+        with open(cache_file, 'rb') as f:
             cache = pickle.load(f)
-        return (
-            cache.get('raw_data', {}),
-            cache.get('watchlist', {}),
-            cache.get('stock_info', {}),
-            cache.get('last_update')
-        )
+
+        df          = cache.get('df')
+        last_update = cache.get('last_update')
+
+        if df is None or df.empty:
+            return None, None
+
+        # 檢查時效
+        if last_update:
+            data_date = df.index[-1].date()
+            days_diff = (datetime.now().date() - data_date).days
+            if days_diff > CACHE_MAX_STALENESS_DAYS:
+                logger.warning(f'[CACHE] BTC {timeframe} 快取已過期 ({days_diff}d)')
+                return None, None
+
+        logger.info(f'[CACHE] 載入 BTC {timeframe} 快取: {len(df)} 根')
+        return df, last_update
+
     except Exception as e:
-        logger.warning(f"載入快取失敗: {e}")
-        return {}, {}, {}, None
+        logger.warning(f'[CACHE] 讀取失敗: {e}')
+        return None, None
 
 
-def load_stock_cache(max_staleness_days: int = CACHE_MAX_STALENESS_DAYS) -> Tuple[dict, dict, dict, Optional[datetime]]:
-    """
-    智慧載入快取
-    
-    Args:
-        max_staleness_days: 允許的最大過期天數
-    
-    Returns:
-        (raw_data, watchlist, stock_info, last_update)
-    """
-    logger.info(f"Stock Cache 檔案: {STOCK_CACHE_FILE}")
-    
-    if not STOCK_CACHE_FILE.exists():
-        logger.warning("Stock 快取檔案不存在")
-        return {}, {}, {}, None
-    
-    raw_data, watchlist, stock_info, cache_time = load_stock_cache_raw()
-    
-    if not raw_data:
-        logger.warning("快取中無股票資料")
-        return {}, {}, {}, None
-    
-    # 檢查快取時效性
-    cache_data_date = _get_cache_data_date(raw_data)
-    if cache_data_date is None:
-        logger.warning("無法取得快取資料日期")
-        return {}, {}, {}, None
-    
-    today = datetime.now().date()
-    days_diff = (today - cache_data_date).days
-    
-    logger.info(f"快取最新數據日期: {cache_data_date}, 差距: {days_diff} 天")
-    
-    if days_diff <= max_staleness_days:
-        logger.info(f"快取資料在 {max_staleness_days} 天內，使用快取")
-        return raw_data, watchlist, stock_info, cache_time
-    else:
-        logger.warning(f"快取資料已過期 {days_diff} 天")
-        return {}, {}, {}, None
-
-
-def save_stock_cache(raw_data: dict, watchlist: dict, stock_info: dict):
-    """儲存資料到快取"""
+def save_btc_cache(df: pd.DataFrame, timeframe: str) -> None:
+    """儲存 BTC 快取"""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    
+    cache_file = _get_cache_path(timeframe)
+
     try:
-        cache = {
-            'raw_data': raw_data,
-            'watchlist': watchlist,
-            'stock_info': stock_info,
-            'last_update': datetime.now()
-        }
-        with open(STOCK_CACHE_FILE, 'wb') as f:
+        cache = {'df': df, 'last_update': datetime.now()}
+        with open(cache_file, 'wb') as f:
             pickle.dump(cache, f)
-        logger.info(f"已儲存 Stock 快取: {len(raw_data)} 檔股票")
+        logger.info(f'[CACHE] 已儲存 BTC {timeframe} 快取: {len(df)} 根')
     except Exception as e:
-        logger.error(f"儲存 Stock 快取失敗: {e}")
+        logger.error(f'[CACHE] 儲存失敗: {e}')
 
 
-def smart_load_or_fetch(use_cache: bool = False, show_progress: bool = True) -> Tuple[dict, dict, dict, Optional[datetime]]:
+def smart_load_btc(
+    symbol: str = 'BTC-USD',
+    timeframe: str = '1d',
+    period: str = None,
+    start: str = None,
+    end: str = None,
+    use_cache: bool = False,
+) -> pd.DataFrame:
     """
     智慧載入策略：
-    1. 若 use_cache=True，強制使用快取
+    1. use_cache=True → 強制使用本地快取（debug 模式）
     2. 先檢查快取是否過期
-    3. 若過期則嘗試抓取新資料
-    4. 若抓取失敗則 fallback 使用舊快取
-    
-    Args:
-        use_cache: 是否強制使用快取（--debug 模式）
-        show_progress: 是否顯示進度
-    
+    3. 若過期則從 yfinance 抓取並更新快取
+    4. 抓取失敗時 fallback 使用舊快取
+
     Returns:
-        (raw_data, watchlist, stock_info, last_update)
+        DataFrame 或空 DataFrame
     """
-    # use_cache=True：強制使用快取
     if use_cache:
-        logger.info("[DEBUG] 使用本地快取模式")
-        raw_data, watchlist, stock_info, last_update = load_stock_cache_raw()
-        if raw_data:
-            logger.info(f"[DEBUG] 載入快取成功: {len(raw_data)} 檔股票")
-            return raw_data, watchlist, stock_info, last_update
-        else:
-            logger.error("[DEBUG] 快取不存在或無法讀取")
-            return {}, {}, {}, None
-    
-    # 生產模式：先檢查快取
-    raw_data, watchlist, stock_info, last_update = load_stock_cache()
-    
-    if raw_data:
-        return raw_data, watchlist, stock_info, last_update
-    
-    # 快取過期或不存在，嘗試抓取
-    logger.info("開始抓取股票資料...")
-    new_raw_data, new_watchlist, new_stock_info = fetch_all_stock_data(show_progress)
-    
-    if new_raw_data and len(new_raw_data) > 0:
-        new_last_update = datetime.now()
-        save_stock_cache(new_raw_data, new_watchlist, new_stock_info)
-        logger.info(f"股票資料抓取完成: {len(new_raw_data)} 檔")
-        return new_raw_data, new_watchlist, new_stock_info, new_last_update
-    else:
-        # 抓取失敗，fallback 到舊快取
-        logger.warning("抓取失敗，嘗試使用舊快取...")
-        old_raw_data, old_watchlist, old_stock_info, old_last_update = load_stock_cache_raw()
-        
-        if old_raw_data:
-            cache_data_date = _get_cache_data_date(old_raw_data)
-            logger.info(f"Fallback 使用舊快取 (資料日期: {cache_data_date})")
-            return old_raw_data, old_watchlist, old_stock_info, old_last_update
-        else:
-            logger.error("無可用快取，無法取得資料")
-            return {}, {}, {}, None
+        df, _ = load_btc_cache(timeframe)
+        if df is not None:
+            return df
+        logger.warning('[DEBUG] 快取不存在，嘗試即時抓取...')
+
+    # 檢查快取
+    df, _ = load_btc_cache(timeframe)
+    if df is not None:
+        return df
+
+    # 從 yfinance 抓取
+    logger.info(f'[DATA] 從 yfinance 抓取 {symbol} {timeframe}...')
+    df = fetch_btc_ohlcv(symbol, timeframe, period, start, end)
+
+    if not df.empty:
+        save_btc_cache(df, timeframe)
+        return df
+
+    # fallback：嘗試讀取舊快取（不論時效）
+    cache_file = _get_cache_path(timeframe)
+    if cache_file.exists():
+        logger.warning('[DATA] 抓取失敗，使用舊快取...')
+        try:
+            with open(cache_file, 'rb') as f:
+                cache = pickle.load(f)
+            old_df = cache.get('df')
+            if old_df is not None and not old_df.empty:
+                logger.info(f'[DATA] 使用舊快取: {len(old_df)} 根')
+                return old_df
+        except Exception:
+            pass
+
+    logger.error('[DATA] 無法取得 BTC 資料')
+    return pd.DataFrame()
 
 
 # =============================================================================
-# 市場過濾工具
+# 工具函數
 # =============================================================================
 
-def filter_by_market(stock_data: dict, stock_info: dict, market: str) -> Tuple[dict, dict]:
+def _get_cache_path(timeframe: str):
+    """取得對應 timeframe 的快取路徑"""
+    return BTC_CACHE_FILE.parent / f'btc_{timeframe}.pkl'
+
+
+def slice_ohlcv(df: pd.DataFrame, start: str, end: str = None) -> pd.DataFrame:
     """
-    依市場過濾股票資料
-    
+    裁切 OHLCV 資料到指定日期範圍
+
     Args:
-        market: 'global', 'us', 'tw'
-    
+        df:    OHLCV DataFrame
+        start: 開始日期 'YYYY-MM-DD'
+        end:   結束日期 'YYYY-MM-DD'（None = 最後一天）
+
     Returns:
-        (filtered_stock_data, filtered_stock_info)
+        裁切後的 DataFrame（含 start 和 end）
     """
-    if market == 'global':
-        return stock_data, stock_info
-    
-    target_country = 'US' if market == 'us' else 'TW'
-    filtered_symbols = {s for s, info in stock_info.items() 
-                        if info.get('country') == target_country}
-    
-    filtered_data = {s: df for s, df in stock_data.items() if s in filtered_symbols}
-    filtered_info = {s: info for s, info in stock_info.items() if s in filtered_symbols}
-    
-    logger.info(f"過濾後: {len(filtered_data)} 檔 {target_country} 股票")
-    return filtered_data, filtered_info
+    if df.empty:
+        return df
+
+    mask = df.index >= pd.Timestamp(start)
+    if end:
+        mask &= df.index <= pd.Timestamp(end)
+
+    return df[mask].copy()

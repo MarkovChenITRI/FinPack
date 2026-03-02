@@ -1,12 +1,20 @@
 """
-回測引擎模組
+回測引擎模組（股票多資產策略參考模板）
 
-支援買賣條件、再平衡策略、績效計算
+NOTE: 此模組為股票多資產策略回測引擎，設計上依賴以下已移除的模組：
+  - core.indicator.Indicators（Sharpe/Growth 排名）
+  - core.currency.FX（USD/TWD 換匯）
 
-幣別處理：
-- 所有資金以 TWD 為準（使用 Money 類型）
-- 美股價格為 USD，需根據當日匯率轉換
-- 台股價格為 TWD
+若要執行 BTC-USD SMC 策略，請改用 backtest/smc_engine.py。
+此檔案保留作為架構設計參考（回測迴圈、持倉管理、報告格式）。
+
+===================================================================
+回測引擎設計重點：
+- 每日迴圈：更新峰值 → 賣出 → 再平衡 → 記錄權益
+- 持倉以 Money 類型追蹤（幣別安全）
+- 5 種再平衡策略（immediate/batch/delayed/concentrated/none）
+- 完整交易日誌（含幣別、手續費、損益）
+===================================================================
 """
 import logging
 import pandas as pd
@@ -15,9 +23,17 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Union
 from enum import Enum
 
-from core.config import NON_TRADABLE_INDUSTRIES
-from core.indicator import Indicators
-from core.currency import Money, Currency, twd, usd, FX
+# 這些模組在 BTC 版本中已移除，僅保留 import 作為文件說明
+try:
+    from core.currency import Money, Currency, twd, usd, FX
+except ImportError:
+    Money = None
+    twd = usd = FX = None
+
+NON_TRADABLE_INDUSTRIES = frozenset({'Market Index', 'Index'})
+
+# Indicators 類型標記（BTC 版本不使用）
+Indicators = None
 
 logger = logging.getLogger(__name__)
 

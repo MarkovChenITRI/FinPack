@@ -1,45 +1,39 @@
 /**
- * formatter.js - 數字格式化工具
+ * formatter.js — BTC SMC 數字格式化工具
  */
 
-/**
- * 格式化金額（台幣）
- * @param {number} value - 金額
- * @returns {string} - 格式化後的字串
- */
-export function formatTWD(value) {
-    return `$${value.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`;
+export function formatUSD(value, decimals = 2) {
+    return `$${Number(value).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    })}`;
 }
 
-/**
- * 格式化百分比
- * @param {number} value - 數值
- * @param {number} decimals - 小數位數
- * @returns {string} - 格式化後的字串
- */
-export function formatPercent(value, decimals = 2) {
-    return `${value.toFixed(decimals)}%`;
+export function formatPercent(value, decimals = 2, showSign = false) {
+    const n = Number(value);
+    const sign = showSign && n > 0 ? '+' : '';
+    return `${sign}${n.toFixed(decimals)}%`;
 }
 
-/**
- * 格式化股數（去除尾部零）
- * @param {number} value - 股數
- * @returns {string} - 格式化後的字串
- */
-export function formatShares(value) {
-    return value.toFixed(4).replace(/\.?0+$/, '');
-}
-
-/**
- * 格式化日期
- * @param {Date|string} date - 日期
- * @returns {string} - YYYY-MM-DD 格式
- */
 export function formatDate(date) {
-    if (typeof date === 'string') return date;
+    if (typeof date === 'string') return date.slice(0, 10);
     const d = new Date(date);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+}
+
+export function formatBTC(value) {
+    return `${Number(value).toFixed(6)} BTC`;
+}
+
+/** 將方向轉為中文 */
+export function formatDirection(dir) {
+    return dir === 'long' ? 'Long (多)' : 'Short (空)';
+}
+
+/** 根據正負值設定樣式類名 */
+export function signClass(value) {
+    return Number(value) >= 0 ? 'positive' : 'negative';
 }

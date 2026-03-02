@@ -1,177 +1,122 @@
 """
-回測 API 路由
-
-提供後端回測功能，前端只負責 UI 和參數設定
+SMC 回測 API 路由（BTC-USD 版）
 
 路由：
-- POST /api/backtest/run      執行回測
-- GET  /api/backtest/config   取得可用條件選項
+- POST /api/backtest/run     執行 BTC-USD SMC 策略回測
+- GET  /api/backtest/config  取得可用條件選項與預設值
 """
 import logging
+import time
+import pandas as pd
 from flask import Blueprint, jsonify, request
 
-from core.currency import usd
-
-from backtest.config import CONDITION_OPTIONS, DEFAULT_CONFIG, load_config, ConfigError
-from backtest.runner import run_backtest
+from core import container
+from backtest.smc_config import SMC_CONDITION_OPTIONS, DEFAULT_SMC_CONFIG, load_smc_config, SmcConfigError
+from backtest.smc_engine import SmcEngine
 
 logger = logging.getLogger(__name__)
 
 backtest_bp = Blueprint('backtest', __name__)
 
 
-# =============================================================================
-# API 路由
-# =============================================================================
-
 @backtest_bp.route('/backtest/config')
 def get_backtest_config():
-    """取得可用的回測條件選項"""
+    """取得 SMC 可用條件選項與預設值"""
+    logger.info('[API] GET /backtest/config')
     return jsonify({
-        'options': CONDITION_OPTIONS,
-        'defaults': DEFAULT_CONFIG
+        'options':  SMC_CONDITION_OPTIONS,
+        'defaults': DEFAULT_SMC_CONFIG,
     })
 
 
 @backtest_bp.route('/backtest/run', methods=['POST'])
 def run_backtest_route():
     """
-    執行回測
+    執行 BTC-USD SMC 策略回測
 
-    Request JSON:
+    Request JSON（所有欄位可省略，缺省使用 DEFAULT_SMC_CONFIG）：
     {
-        "initial_capital": 1000000,
-        "amount_per_stock": 100000,
-        "max_positions": 10,
-        "market": "us",
-        "start_date": "2020-01-01",  // 固定起始日（必填）
-        "end_date": null,            // 結束日（null = 系統今日最近交易日）
-        "rebalance_freq": "weekly",
-        "buy_conditions": {...},
-        "sell_conditions": {...},
-        "rebalance_strategy": {...}
-    }
-
-    Response:
-    {
-        "success": true,
-        "result": {
-            "metrics": {...},
-            "equity_curve": [...],
-            "trades": [...],
-            "current_holdings": [...]
-        }
+        "initial_capital": 10000,
+        "leverage":        1,
+        "risk_per_trade":  0.02,
+        "timeframe":       "1d",
+        "start_date":      "2022-01-01",
+        "end_date":        null,
+        "allow_long":      true,
+        "allow_short":     false,
+        "entry_conditions": {...},
+        "exit_conditions":  {...}
     }
     """
-    logger.info('[API] run_backtest() 被呼叫')
-
-    # 1. 載入並驗證配置（ConfigError → 400）
-    try:
-        config = load_config(request.json or {})
-    except ConfigError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-    logger.info('[API] 收到前端回測請求: market=%s, start=%s, end=%s, rebalance=%s',
-                config['market'], config['start_date'], config['end_date'], config['rebalance_freq'])
-
-    # 2. 執行共用 pipeline
-    try:
-        ctx = run_backtest(config, source='API')
-    except RuntimeError as e:
-        status = 503 if '尚未載入' in str(e) else 400
-        return jsonify({'success': False, 'error': str(e)}), status
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
-    except Exception:
-        logger.exception('回測執行失敗')
-        return jsonify({'success': False, 'error': '回測執行失敗，請查看伺服器日誌'}), 500
-
-    result = ctx['result']
-    engine = ctx['engine']
-    close_df = ctx['close_df']
-    stock_info = ctx['stock_info']
-    end_dt = ctx['end_dt']
-    elapsed = ctx['elapsed']
-    benchmark_curve = ctx['benchmark_curve']
-    benchmark_name = ctx['benchmark_name']
-
-    # 3. 建立當前持倉（API 特有格式，純數值供 JSON 序列化）
-    from core import container
-    current_holdings = _get_current_holdings(
-        engine, close_df, stock_info, container.fx, end_dt
+    t0 = time.perf_counter()
+    raw = request.json or {}
+    logger.info(
+        '[API] POST /backtest/run | capital=%.0f leverage=%sx tf=%s %s~%s long=%s short=%s',
+        raw.get('initial_capital', DEFAULT_SMC_CONFIG['initial_capital']),
+        raw.get('leverage',        DEFAULT_SMC_CONFIG['leverage']),
+        raw.get('timeframe',       DEFAULT_SMC_CONFIG['timeframe']),
+        raw.get('start_date',      DEFAULT_SMC_CONFIG['start_date']),
+        raw.get('end_date')        or 'latest',
+        raw.get('allow_long',      DEFAULT_SMC_CONFIG['allow_long']),
+        raw.get('allow_short',     DEFAULT_SMC_CONFIG['allow_short']),
     )
 
-    # 4. 格式化 JSON 回應
-    response = {
+    # 1. 解析與驗證配置（唯一來源：DEFAULT_SMC_CONFIG 合併使用者覆蓋）
+    try:
+        config = load_smc_config(raw)
+    except SmcConfigError as e:
+        logger.warning('[API] 配置驗證失敗: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    # 2. 取得 OHLCV 資料
+    timeframe = config['timeframe']
+    ohlcv = container.get_ohlcv(timeframe)
+    if ohlcv.empty:
+        logger.error('[API] 無法取得 %s OHLCV', timeframe)
+        return jsonify({'success': False, 'error': f'無法取得 BTC-USD {timeframe} 資料'}), 503
+
+    logger.info('[API] 使用 %s OHLCV，共 %d 根K線', timeframe, len(ohlcv))
+
+    # 3. 執行回測（後端引擎）
+    try:
+        engine = SmcEngine(ohlcv, config)
+        result = engine.run(
+            start_date = config['start_date'],
+            end_date   = config.get('end_date'),
+        )
+    except Exception as e:
+        logger.exception('[API] SMC 回測引擎異常')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # 4. BTC Buy & Hold 基準
+    start_ts = min(
+        ohlcv.index.searchsorted(pd.Timestamp(config['start_date'])),
+        len(ohlcv) - 1
+    )
+    bh_start  = float(ohlcv['Close'].iloc[start_ts])
+    bh_end    = float(ohlcv['Close'].iloc[-1])
+    bh_return = (bh_end - bh_start) / bh_start
+
+    metrics = result.to_dict()
+    metrics['benchmark_return']     = f"{bh_return:.2%}"
+    metrics['benchmark_return_raw'] = bh_return
+    metrics['alpha']                = f"{result.total_return - bh_return:+.2%}"
+
+    elapsed = time.perf_counter() - t0
+    logger.info(
+        '[API] 回測完成 | 耗時=%.2fs 交易=%d 勝率=%s 報酬=%s alpha=%s',
+        elapsed,
+        result.total_trades,
+        f"{result.win_rate:.1%}",
+        f"{result.total_return:.2%}",
+        metrics['alpha'],
+    )
+
+    return jsonify({
         'success': True,
         'result': {
-            'metrics': {
-                'initial_capital': result.initial_capital.amount,
-                'final_equity': result.final_equity.amount,
-                'total_return': round(result.total_return * 100, 2),
-                'annualized_return': round(result.annualized_return * 100, 2),
-                'total_trades': result.total_trades,
-                'win_trades': result.win_trades,
-                'loss_trades': result.loss_trades,
-                'win_rate': round(result.win_rate * 100, 2),
-                'max_drawdown': round(result.max_drawdown * 100, 2),
-                'sharpe_ratio': round(result.sharpe_ratio, 2),
-            },
+            'metrics':      metrics,
             'equity_curve': result.equity_curve,
-            'benchmark_curve': benchmark_curve,
-            'benchmark_name': benchmark_name,
-            'trades': result.trades,  # 已經是 dict list
-            'current_holdings': current_holdings,
-            'cash': engine.cash.amount,
-            'date_range': {
-                'start': ctx['start_dt'].strftime('%Y-%m-%d'),
-                'end': end_dt.strftime('%Y-%m-%d'),
-                'trading_days': len(result.equity_curve)
-            },
-            'elapsed_seconds': round(elapsed, 2)
+            'trades':       result.trades,
         }
-    }
-
-    return jsonify(response)
-
-
-# =============================================================================
-# 輔助函數
-# =============================================================================
-
-def _get_current_holdings(engine, close_df, stock_info, fx, end_dt):
-    """取得當前持倉詳情（純數值，供 JSON 序列化）"""
-    date_index = close_df.index
-    actual_end_idx = date_index.searchsorted(end_dt, side='right') - 1
-    end_date_str = close_df.index[actual_end_idx].strftime('%Y-%m-%d')
-
-    holdings = []
-    for symbol, pos in engine.positions.items():
-        country = stock_info.get(symbol, {}).get('country', 'US')
-        current_price = close_df.iloc[actual_end_idx].get(symbol, pos.avg_cost.amount)
-
-        # 計算市值
-        if country == 'TW':
-            market_value = pos.shares * current_price
-        else:
-            market_value = fx.to_twd(usd(pos.shares * current_price), end_date_str).amount
-
-        # 計算損益
-        cost_in_twd = pos.cost_basis.amount
-        pnl_pct = (market_value - cost_in_twd) / cost_in_twd if cost_in_twd > 0 else 0
-
-        holdings.append({
-            'symbol': symbol,
-            'shares': pos.shares,
-            'avg_cost': pos.avg_cost.amount,
-            'avg_cost_currency': pos.avg_cost.currency.name,
-            'current_price': current_price,
-            'market_value': round(market_value, 0),
-            'pnl_pct': round(pnl_pct * 100, 2),
-            'buy_date': pos.buy_date,
-            'industry': stock_info.get(symbol, {}).get('industry', 'Unknown'),
-            'country': country,
-        })
-
-    holdings.sort(key=lambda x: x['buy_date'], reverse=True)
-    return holdings
+    })

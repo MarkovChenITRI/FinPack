@@ -1,38 +1,38 @@
 /**
- * config.js - 前端配置中心
- * 
- * 統一定義：
- *   - API 端點路徑
- *   - 預設參數
- *   - 常數定義
+ * config.js — BTC SMC 前端配置
+ *
+ * 本檔案只定義：
+ *   API 端點路徑、圖表 UI 常數、視覺顏色
+ *
+ * ⚠️ 回測業務邏輯的預設值（initial_capital、leverage、risk_per_trade 等）
+ *    統一由後端 DEFAULT_SMC_CONFIG (backtest/smc_config.py) 管理，
+ *    前端透過 GET /api/backtest/config 取得，不在此重複定義。
  */
 
-// ===== API 端點 =====
 export const API = {
-    // 市場數據
-    MARKET_DATA: '/api/market-data',
-    EXCHANGE_RATE: '/api/exchange-rate',
-    
-    // 股票數據
-    STOCKS: '/api/stocks',
-    STOCK_PRICE: '/api/stock-price',  // + /{ticker}?date={date}
-    INDUSTRY_DATA: '/api/industry/data',
-    
-    // 回測相關
-    BACKTEST_RUN: '/api/backtest/run',
+    HEALTH:          '/api/health',
+    KLINE:           '/api/kline/btc',
+    MARKET_STATUS:   '/api/market-status',
+    SIGNALS:         '/api/btc/signals',
+    BACKTEST_RUN:    '/api/backtest/run',
     BACKTEST_CONFIG: '/api/backtest/config',
-    BACKTEST_PRICES: '/api/backtest/prices'
 };
 
-// ===== 預設參數 =====
-export const DEFAULTS = {
-    INITIAL_CAPITAL: 1000000,
-    EXCHANGE_RATE: 32.0,
-    TOP_N: 15,
-    AMOUNT_PER_STOCK: 100000,
-    MAX_POSITIONS: 10
+/** 僅限 K 線圖 UI 的預設值（與回測業務邏輯無關） */
+export const UI = {
+    TIMEFRAME: '1d',   // 圖表預設 timeframe
+    PERIOD:    '2y',   // 圖表預設顯示期間
 };
 
-// ===== 常數定義 =====
-// 不可交易的產業類型（由 TradingView 分類決定）
-export const NON_TRADABLE_INDUSTRIES = new Set(['Market Index', 'Index']);
+export const SIGNAL_COLORS = {
+    BOS_BULL:   '#26a69a',
+    BOS_BEAR:   '#ef5350',
+    CHOCH_BULL: '#00bcd4',
+    CHOCH_BEAR: '#ff9800',
+    FVG_BULL:   'rgba(38, 166, 154, 0.15)',
+    FVG_BEAR:   'rgba(239, 83, 80, 0.15)',
+    OB_BULL:    'rgba(38, 166, 154, 0.25)',
+    OB_BEAR:    'rgba(239, 83, 80, 0.25)',
+    LP_BUY:     '#00bcd4',
+    LP_SELL:    '#ff9800',
+};
